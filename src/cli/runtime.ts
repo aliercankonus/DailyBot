@@ -7,8 +7,13 @@ import { newPaperState, PaperExchange, type PaperState } from "../exchange/paper
 import type { Exchange } from "../exchange/types.js";
 import { consoleNotifier, telegramNotifier, type Notifier } from "../notify/notifier.js";
 
-export function makePool(cfg: AppConfig) {
-  return new pg.Pool({ connectionString: cfg.DATABASE_URL, max: 5 });
+export function makePool(cfg: Pick<AppConfig, "DATABASE_URL">) {
+  const pool = new pg.Pool({ connectionString: cfg.DATABASE_URL, max: 5, keepAlive: true });
+  // An idle client losing its connection emits 'error' on the pool; unhandled, it would crash the process.
+  pool.on("error", (e) => {
+    console.error(JSON.stringify({ level: "error", msg: "postgres pool error", error: e.message, time: new Date().toISOString() }));
+  });
+  return pool;
 }
 
 export function makeNotifier(cfg: AppConfig): Notifier {
@@ -19,7 +24,8 @@ export function makeNotifier(cfg: AppConfig): Notifier {
 export async function makeExchange(cfg: AppConfig, repo: PgRepo): Promise<{ exchange: Exchange; persist: () => Promise<void> }> {
   if (cfg.MODE === "paper") {
     // Paper mode uses PUBLIC live market data only; no API key is sent.
-    const md = new BinanceFutures({ apiKey: "", apiSecret: "", baseUrl: "https://fapi.binance.com", stopOrderApi: cfg.BINANCE_STOP_API });
+    // stopOrderApi is unused here: the paper exchange simulates stops itself.
+    const md = new BinanceFutures({ apiKey: "", apiSecret: "", baseUrl: "https://fapi.binance.com", stopOrderApi: "legacy" });
     const state = (await repo.getState<PaperState>("paperState")) ?? newPaperState(cfg.PAPER_START_BALANCE);
     const ex = new PaperExchange(md, state, { takerFee: cfg.TAKER_FEE, slippage: cfg.SLIPPAGE });
     return { exchange: ex, persist: () => repo.setState("paperState", ex.state) };

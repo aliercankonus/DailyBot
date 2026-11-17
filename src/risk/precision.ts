@@ -2,17 +2,19 @@
 // never reach the exchange, so results are rounded to the step's decimal count.
 export function decimalsOf(step: number): number {
   const s = step.toString();
-  if (s.includes("e-")) return Number(s.split("e-")[1]);
-  const dot = s.indexOf(".");
-  return dot === -1 ? 0 : s.length - dot - 1;
+  const [mantissa = "", exp] = s.split("e");
+  const dot = mantissa.indexOf(".");
+  const mantissaDecimals = dot === -1 ? 0 : mantissa.length - dot - 1;
+  return Math.max(0, mantissaDecimals - (exp ? Number(exp) : 0));
 }
 
 function snap(value: number, step: number, mode: "floor" | "ceil" | "round"): number {
   if (!(step > 0) || !Number.isFinite(value)) return value;
   const d = decimalsOf(step);
   const ratio = value / step;
-  // Tolerate float noise just below an integer (e.g. 2.9999999999).
-  const n = mode === "floor" ? Math.floor(ratio + 1e-9) : mode === "ceil" ? Math.ceil(ratio - 1e-9) : Math.round(ratio);
+  // Tolerate float noise just next to an integer (e.g. 2.9999999999), relative to the ratio's size.
+  const eps = Math.max(1e-9, Math.abs(ratio) * 1e-12);
+  const n = mode === "floor" ? Math.floor(ratio + eps) : mode === "ceil" ? Math.ceil(ratio - eps) : Math.round(ratio);
   return Number((n * step).toFixed(d));
 }
 

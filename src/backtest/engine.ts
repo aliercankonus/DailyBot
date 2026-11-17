@@ -1,12 +1,20 @@
 // Portfolio backtester. Rules that keep it honest:
 //  * The strategy sees only closed candles [0..i]. Entries fill at the NEXT candle's open.
 //  * Stops are checked against each candle's high/low. A gap through the stop fills at the open.
-//  * Every fill pays taker fee + slippage. Open positions pay funding every 8 hours.
-//  * Sizing and portfolio limits use the same code as live (sizePosition, maxOpenPositions).
+//  * Every fill pays taker fee + slippage. Open positions pay funding at each 8h UTC settlement
+//    (00:00, 08:00, 16:00) that falls inside a held candle strictly after entry, on mark notional
+//    (quantity x that candle's open).
+//  * Sizing and portfolio limits use the same code as live (sizePosition with round-trip costs,
+//    maxOpenPositions). Sizing equity is mark-to-market: cash + unrealized - accrued funding.
+//  * The strategy receives at most STRATEGY_WINDOW closed candles, exactly like the live engine,
+//    so window-dependent indicators (EMA seed, Wilder ATR) produce the same values.
+//  * Symbols are processed within each timestamp in the order of Object.keys(data), i.e. the
+//    configured symbol order, the same order the live engine loops in. When several symbols
+//    signal on the same candle and maxOpenPositions is tight, earlier symbols win.
 import type { Candle, Side } from "../core/types.js";
 import type { SymbolFilters } from "../exchange/types.js";
 import { sizePosition } from "../risk/sizing.js";
-import type { Strategy } from "../strategy/types.js";
+import { STRATEGY_WINDOW, type Strategy } from "../strategy/types.js";
 
 export interface BacktestConfig {
   initialEquity: number;
@@ -67,14 +75,15 @@ interface OpenPos {
   initialStop: number;
   fees: number;
   funding: number;
-  lastFundingTime: number;
+  /** Last known close of this symbol (entry price until the first close is seen). */
+  mark: number;
 }
 
 const EIGHT_HOURS = 8 * 3600_000;
-const LOOSE_FILTERS = (symbol: string): SymbolFilters => ({ symbol, tickSize: 1e-8, stepSize: 1e-8, minQty: 0, maxQty: Number.MAX_SAFE_INTEGER, minNotional: 0 });
+const LOOSE_FILTERS = (symbol: string): SymbolFilters => ({ symbol, tickSize: 1e-8, stepSize: 1e-8, minQty: 0, maxQty: Number.MAX_SAFE_INTEGER, marketStepSize: 1e-8, marketMaxQty: Number.MAX_SAFE_INTEGER, minNotional: 0 });
 
 export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, cfg: BacktestConfig = DEFAULT_BACKTEST): BacktestResult {
-  const symbols = Object.keys(data).sort();
+  const symbols = Object.keys(data); // insertion order = configured order (see header)
   const index: Record<string, Map<number, number>> = {};
   const times = new Set<number>();
   for (const s of symbols) {
@@ -121,10 +130,12 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
           // Skip if the open already gapped beyond the stop.
           const invalid = pend.side === "LONG" ? fillPrice <= pend.stop : fillPrice >= pend.stop;
           if (!invalid) {
+            const equity = markToMarket();
             const size = sizePosition({
-              equity: cash, availableBalance: cash - marginInUse(open), entryPrice: fillPrice,
+              equity, availableBalance: equity - marginInUse(open), entryPrice: fillPrice,
               stopPrice: pend.stop, riskPerTrade: cfg.riskPerTrade, maxLeverage: cfg.maxLeverage,
               filters: cfg.filters?.[s] ?? LOOSE_FILTERS(s),
+              roundTripCostPct: 2 * (cfg.takerFee + cfg.slippage),
             });
             if (size.ok) {
               const fee = fillPrice * size.quantity * cfg.takerFee;
@@ -132,7 +143,7 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
               open.set(s, {
                 symbol: s, side: pend.side, entryTime: c.openTime, entryCandleOpenTime: c.openTime,
                 entryPrice: fillPrice, quantity: size.quantity, leverage: size.leverage, stop: pend.stop, initialStop: pend.stop,
-                fees: fee, funding: 0, lastFundingTime: c.openTime,
+                fees: fee, funding: 0, mark: fillPrice,
               });
             }
           }
@@ -142,16 +153,15 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
       // 2) Intrabar stop check (pessimistic: the stop is assumed hit before any favourable move).
       const pos = open.get(s);
       if (pos) {
-        while (c.openTime - pos.lastFundingTime >= EIGHT_HOURS) {
-          pos.funding += pos.entryPrice * pos.quantity * cfg.fundingPer8h;
-          pos.lastFundingTime += EIGHT_HOURS;
-        }
+        // Pessimistic: settlements inside this candle are charged even if the stop hits in it.
+        const n = fundingSettlements(c.openTime, c.closeTime, pos.entryTime);
+        pos.funding += n * c.open * pos.quantity * cfg.fundingPer8h;
         if (pos.side === "LONG" && c.low <= pos.stop) closePos(pos, Math.min(c.open, pos.stop), c.openTime, "STOP");
         else if (pos.side === "SHORT" && c.high >= pos.stop) closePos(pos, Math.max(c.open, pos.stop), c.openTime, "STOP");
       }
 
       // 3) Candle closed: trail the stop, or look for a new entry.
-      const history = candles.slice(0, i + 1);
+      const history = candles.slice(Math.max(0, i + 1 - STRATEGY_WINDOW), i + 1);
       const still = open.get(s);
       if (still) {
         still.stop = strategy.updateStop(
@@ -164,22 +174,42 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
       }
     }
 
-    // Mark-to-market equity at the end of this timestamp.
-    let unreal = 0;
+    // Mark-to-market equity at the end of this timestamp. A symbol with no candle at t keeps
+    // its last known close.
     for (const p of open.values()) {
       const i = index[p.symbol]!.get(t);
-      const px = i === undefined ? p.entryPrice : data[p.symbol]![i]!.close;
-      unreal += (p.side === "LONG" ? px - p.entryPrice : p.entryPrice - px) * p.quantity - p.funding;
+      if (i !== undefined) p.mark = data[p.symbol]![i]!.close;
     }
-    const eq = cash + unreal;
-    equityCurve.push({ time: t, equity: eq });
+    equityCurve.push({ time: t, equity: markToMarket() });
   }
 
   for (const p of [...open.values()]) {
     const last = data[p.symbol]!.at(-1)!;
     closePos(p, last.close, last.closeTime, "END");
   }
+  // Final point after the END closes (exit fees/slippage paid) so the curve ends at finalEquity.
+  if (timeline.length > 0) {
+    const endTime = Math.max(timeline.at(-1)!, ...symbols.map((s) => data[s]!.at(-1)?.closeTime ?? -Infinity));
+    equityCurve.push({ time: endTime, equity: cash });
+  }
   return { trades, equityCurve, finalEquity: cash };
+
+  /** cash + unrealized PnL at each position's last known mark - accrued funding. */
+  function markToMarket(): number {
+    let eq = cash;
+    for (const p of open.values()) {
+      eq += (p.side === "LONG" ? p.mark - p.entryPrice : p.entryPrice - p.mark) * p.quantity - p.funding;
+    }
+    return eq;
+  }
+}
+
+/** Number of 8h UTC funding settlements t (t % 8h == 0) with fromMs <= t <= toMs and t > afterMs. */
+export function fundingSettlements(fromMs: number, toMs: number, afterMs: number): number {
+  const lo = Math.max(fromMs, afterMs + 1);
+  if (toMs < lo) return 0;
+  const first = Math.ceil(lo / EIGHT_HOURS) * EIGHT_HOURS;
+  return first > toMs ? 0 : Math.floor((toMs - first) / EIGHT_HOURS) + 1;
 }
 
 function marginInUse(open: Map<string, OpenPos>): number {

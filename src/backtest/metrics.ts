@@ -25,17 +25,18 @@ export function computeMetrics(res: BacktestResult, initialEquity: number): Metr
   let maxDd = 0;
   for (const p of res.equityCurve) {
     peak = Math.max(peak, p.equity);
-    maxDd = Math.max(maxDd, (peak - p.equity) / peak);
+    if (peak > 0) maxDd = Math.max(maxDd, (peak - p.equity) / peak);
   }
   const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
   return {
     trades: t.length,
     winRate: t.length ? wins.length / t.length : 0,
+    // No losses: Infinity when there are wins, 0 when there are no trades. Never NaN.
     profitFactor: grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0,
     expectancyR: mean(t.map((x) => x.r)),
     avgWinR: mean(wins.map((x) => x.r)),
     avgLossR: mean(losses.map((x) => x.r)),
-    netReturnPct: (res.finalEquity - initialEquity) / initialEquity,
+    netReturnPct: initialEquity > 0 ? (res.finalEquity - initialEquity) / initialEquity : 0,
     maxDrawdownPct: maxDd,
     totalFees: t.reduce((a, x) => a + x.fees, 0),
     totalFunding: t.reduce((a, x) => a + x.funding, 0),
@@ -62,12 +63,28 @@ export function groupBy<K extends string | number>(trades: BacktestTrade[], key:
   return out;
 }
 
+/** Profit factor for display: "inf" when there are wins and no losses. */
+export function formatProfitFactor(pf: number): string {
+  return Number.isFinite(pf) ? pf.toFixed(2) : pf > 0 ? "inf" : "n/a";
+}
+
+/** Strategy parameters that are bar counts and must stay integers when perturbed. */
+export const INTEGER_PARAM_KEYS: ReadonlySet<string> = new Set(["entryLookback", "emaFast", "emaSlow", "atrPeriod"]);
+
+/**
+ * Robustness sweep value for one parameter: integer periods are rounded (min 1);
+ * multipliers such as stopAtr/trailAtr are scaled unrounded, even if their base is a whole number.
+ */
+export function perturbParam(key: string, base: number, factor: number): number {
+  return INTEGER_PARAM_KEYS.has(key) ? Math.max(1, Math.round(base * factor)) : base * factor;
+}
+
 export function formatMetrics(m: Metrics): string {
   const pct = (x: number) => `${(x * 100).toFixed(2)}%`;
   return [
     `trades        ${m.trades} (long ${m.longs} / short ${m.shorts})`,
     `win rate      ${pct(m.winRate)}`,
-    `profit factor ${Number.isFinite(m.profitFactor) ? m.profitFactor.toFixed(2) : "inf"}`,
+    `profit factor ${formatProfitFactor(m.profitFactor)}`,
     `expectancy    ${m.expectancyR.toFixed(3)} R  (avg win ${m.avgWinR.toFixed(2)}R, avg loss ${m.avgLossR.toFixed(2)}R)`,
     `net return    ${pct(m.netReturnPct)}`,
     `max drawdown  ${pct(m.maxDrawdownPct)}`,

@@ -3,9 +3,13 @@ import type { Candle, Side } from "../core/types.js";
 export interface SymbolFilters {
   symbol: string;
   tickSize: number;
+  /** LOT_SIZE filter: applies to stop (conditional) orders. */
   stepSize: number;
   minQty: number;
   maxQty: number;
+  /** MARKET_LOT_SIZE filter: applies to market orders. Equal to the LOT_SIZE values when absent. */
+  marketStepSize: number;
+  marketMaxQty: number;
   minNotional: number;
 }
 

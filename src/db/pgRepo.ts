@@ -44,6 +44,10 @@ export class PgRepo implements Repo {
     const r = await this.pool.query("SELECT * FROM positions WHERE status='CLOSED' AND exit_time >= $1 ORDER BY exit_time", [sinceMs]);
     return r.rows.map(fromRow);
   }
+  async listClosed(limit: number) {
+    const r = await this.pool.query("SELECT * FROM positions WHERE status='CLOSED' ORDER BY exit_time DESC LIMIT $1", [limit]);
+    return r.rows.map(fromRow);
+  }
   async recordSignal(s: SignalRow) {
     await this.pool.query(
       "INSERT INTO signals (symbol,candle_open_time,side,accepted,gate,detail,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)",

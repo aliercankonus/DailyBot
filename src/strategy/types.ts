@@ -1,6 +1,13 @@
 import type { Candle, OpenPositionView, Signal } from "../core/types.js";
 
 /**
+ * Number of closed candles a strategy is given, live AND in the backtest. A fixed window
+ * keeps history-dependent indicators (EMA seed, Wilder ATR) identical in both, and keeps
+ * the backtest O(n * window). Must stay below Binance's 1500-candle request limit.
+ */
+export const STRATEGY_WINDOW = 1000;
+
+/**
  * A strategy is a pure function of CLOSED candles. The backtester and the live
  * engine call exactly the same object, so what is tested is what trades.
  */

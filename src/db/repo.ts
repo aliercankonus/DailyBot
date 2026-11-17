@@ -48,6 +48,8 @@ export interface Repo {
   insertPosition(p: PositionRow): Promise<void>;
   updatePosition(id: string, patch: Partial<PositionRow>): Promise<void>;
   listClosedSince(sinceMs: number): Promise<PositionRow[]>;
+  /** Most recently closed positions first. */
+  listClosed(limit: number): Promise<PositionRow[]>;
   recordSignal(s: SignalRow): Promise<void>;
   recordEvent(e: EventRow): Promise<void>;
   recordEquity(time: number, equity: number): Promise<void>;
@@ -55,6 +57,7 @@ export interface Repo {
   setState<T>(key: string, value: T): Promise<void>;
 }
 
+/** In-memory Repo with the same observable behaviour as PgRepo: getters return copies, ordering matches the SQL. */
 export class MemoryRepo implements Repo {
   positions: PositionRow[] = [];
   signals: SignalRow[] = [];
@@ -63,12 +66,14 @@ export class MemoryRepo implements Repo {
   state = new Map<string, unknown>();
 
   async getOpenPosition(symbol: string) {
-    return this.positions.find((p) => p.symbol === symbol && p.status === "OPEN") ?? null;
+    const p = this.positions.find((x) => x.symbol === symbol && x.status === "OPEN");
+    return p ? { ...p } : null;
   }
   async listOpenPositions() {
-    return this.positions.filter((p) => p.status === "OPEN");
+    return this.positions.filter((p) => p.status === "OPEN").sort((a, b) => a.entryTime - b.entryTime).map((p) => ({ ...p }));
   }
   async insertPosition(p: PositionRow) {
+    if (this.positions.some((x) => x.id === p.id)) throw new Error(`duplicate position id ${p.id}`);
     if (p.status === "OPEN" && (await this.getOpenPosition(p.symbol))) throw new Error(`open position already exists for ${p.symbol}`);
     this.positions.push({ ...p });
   }
@@ -77,19 +82,31 @@ export class MemoryRepo implements Repo {
     if (p) Object.assign(p, patch);
   }
   async listClosedSince(sinceMs: number) {
-    return this.positions.filter((p) => p.status === "CLOSED" && (p.exitTime ?? 0) >= sinceMs);
+    return this.positions
+      .filter((p) => p.status === "CLOSED" && p.exitTime !== null && p.exitTime >= sinceMs)
+      .sort((a, b) => (a.exitTime ?? 0) - (b.exitTime ?? 0))
+      .map((p) => ({ ...p }));
+  }
+  async listClosed(limit: number) {
+    return this.positions
+      .filter((p) => p.status === "CLOSED")
+      .sort((a, b) => (b.exitTime ?? 0) - (a.exitTime ?? 0))
+      .slice(0, limit)
+      .map((p) => ({ ...p }));
   }
   async recordSignal(s: SignalRow) {
-    this.signals.push(s);
+    this.signals.push({ ...s });
   }
   async recordEvent(e: EventRow) {
-    this.events.push(e);
+    this.events.push(structuredClone(e));
   }
   async recordEquity(time: number, equity: number) {
-    this.equity.push({ time, equity });
+    const existing = this.equity.find((x) => x.time === time);
+    if (existing) existing.equity = equity;
+    else this.equity.push({ time, equity });
   }
   async getState<T>(key: string) {
-    return (this.state.get(key) as T) ?? null;
+    return this.state.has(key) ? (structuredClone(this.state.get(key)) as T) ?? null : null;
   }
   async setState<T>(key: string, value: T) {
     this.state.set(key, structuredClone(value));

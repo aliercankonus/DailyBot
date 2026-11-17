@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { loadConfig } from "../config.js";
 import { makePool } from "./runtime.js";
 
-const cfg = loadConfig();
+const cfg = loadConfig(process.env, "migrate");
 const pool = makePool(cfg);
 // schema.sql lives in src/db; in the Docker image it is copied next to dist/db.
 const candidates = [new URL("../db/schema.sql", import.meta.url), new URL("../../src/db/schema.sql", import.meta.url)];

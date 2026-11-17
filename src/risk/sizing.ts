@@ -14,6 +14,8 @@ export interface SizingInput {
   filters: SymbolFilters;
   /** Fraction of the liquidation distance the stop may use. 0.5 = stop sits halfway to liquidation. */
   liquidationBuffer?: number;
+  /** Expected round-trip cost (fees + slippage, both legs) as a fraction of price. Counted as risk. */
+  roundTripCostPct?: number;
 }
 
 export type SizingResult =
@@ -23,7 +25,13 @@ export type SizingResult =
 export function sizePosition(inp: SizingInput): SizingResult {
   const { equity, availableBalance, entryPrice, stopPrice, riskPerTrade, maxLeverage, filters } = inp;
   const buffer = inp.liquidationBuffer ?? 0.5;
-  if (!(equity > 0) || !(entryPrice > 0) || !(stopPrice > 0)) return { ok: false, reason: "INVALID_INPUT" };
+  const cost = inp.roundTripCostPct ?? 0;
+  const finitePos = (x: number) => Number.isFinite(x) && x > 0;
+  if (![equity, availableBalance, entryPrice, stopPrice, riskPerTrade, maxLeverage].every(finitePos) || !(cost >= 0)) {
+    return { ok: false, reason: "INVALID_INPUT" };
+  }
+  const stepSize = Math.max(filters.stepSize, filters.marketStepSize);
+  const maxQty = Math.min(filters.maxQty, filters.marketMaxQty);
 
   const stopDist = Math.abs(entryPrice - stopPrice);
   const stopPct = stopDist / entryPrice;
@@ -34,8 +42,10 @@ export function sizePosition(inp: SizingInput): SizingResult {
   const liqSafeLeverage = Math.floor(buffer / stopPct);
   if (liqSafeLeverage < 1) return { ok: false, reason: "STOP_TOO_WIDE_FOR_1X" };
 
+  // A stop-out loses the stop distance plus the round-trip costs.
+  const lossPerUnit = stopDist + entryPrice * cost;
   const riskAmount = equity * riskPerTrade;
-  let qty = riskAmount / stopDist;
+  let qty = riskAmount / lossPerUnit;
   let notional = qty * entryPrice;
 
   // Leverage needed to post this notional from free margin (keep 5% headroom for fees).
@@ -47,11 +57,11 @@ export function sizePosition(inp: SizingInput): SizingResult {
   }
   const leverage = Math.max(1, Math.min(leverageCap, Math.ceil(notional / usable)));
 
-  qty = floorToStep(qty, filters.stepSize);
+  qty = floorToStep(qty, stepSize);
   if (qty < filters.minQty) return { ok: false, reason: `BELOW_MIN_QTY (${qty} < ${filters.minQty})` };
-  if (qty > filters.maxQty) qty = floorToStep(filters.maxQty, filters.stepSize);
+  if (qty > maxQty) qty = floorToStep(maxQty, stepSize);
   notional = qty * entryPrice;
   if (notional < filters.minNotional) return { ok: false, reason: `BELOW_MIN_NOTIONAL (${notional.toFixed(2)} < ${filters.minNotional})` };
 
-  return { ok: true, quantity: qty, leverage, notional, riskAmount: qty * stopDist };
+  return { ok: true, quantity: qty, leverage, notional, riskAmount: qty * lossPerUnit };
 }

@@ -28,7 +28,7 @@ export function uptrend(flat = 220, up = 60, base = 100): number[] {
   return out;
 }
 
-export const FILTERS: SymbolFilters = { symbol: "BTCUSDT", tickSize: 0.1, stepSize: 0.001, minQty: 0.001, maxQty: 1000, minNotional: 5 };
+export const FILTERS: SymbolFilters = { symbol: "BTCUSDT", tickSize: 0.1, stepSize: 0.001, minQty: 0.001, maxQty: 1000, marketStepSize: 0.001, marketMaxQty: 1000, minNotional: 5 };
 
 /** Scriptable in-memory exchange for engine tests. */
 export class FakeExchange implements Exchange {
@@ -43,16 +43,24 @@ export class FakeExchange implements Exchange {
   fills: Record<string, TradeFill[]> = {};
   calls: string[] = [];
   failPlaceStop = false;
+  /** When set, placeStop throws this error (takes precedence over failPlaceStop). */
+  placeStopError: Error | null = null;
   failMarket = false;
+  failBalance = false;
+  lastCandleLimit = 0;
   leverage: Record<string, number> = {};
   private seq = 1;
 
   async getServerTime() { return this.now; }
   async getClosedCandles(symbol: string, _i: string, limit: number) {
+    this.lastCandleLimit = limit;
     return (this.candles[symbol] ?? []).filter((c) => c.closeTime < this.now).slice(-limit);
   }
   async getFilters(symbol: string) { return { ...FILTERS, symbol }; }
-  async getBalance() { return { ...this.balance }; }
+  async getBalance() {
+    if (this.failBalance) throw new Error("balance unavailable");
+    return { ...this.balance };
+  }
   async getPosition(symbol: string) { return this.positions[symbol] ?? null; }
   async prepareSymbol(symbol: string, leverage: number) { this.leverage[symbol] = leverage; this.calls.push(`prepare ${symbol} ${leverage}`); }
   async marketOrder(p: { symbol: string; side: "BUY" | "SELL"; quantity: number; reduceOnly: boolean; clientOrderId: string }) {
@@ -72,6 +80,7 @@ export class FakeExchange implements Exchange {
     return f;
   }
   async placeStop(p: { symbol: string; side: "BUY" | "SELL"; quantity: number; stopPrice: number; clientId: string }) {
+    if (this.placeStopError) throw this.placeStopError;
     if (this.failPlaceStop) throw new Error("stop rejected");
     this.calls.push(`stop ${p.side} ${p.stopPrice.toFixed(2)} ${p.clientId}`);
     const s: StopOrder = { id: `S${this.seq++}`, clientId: p.clientId, symbol: p.symbol, side: p.side, stopPrice: p.stopPrice, quantity: p.quantity };

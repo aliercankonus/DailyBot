@@ -5,9 +5,10 @@
 // --robustness re-runs out-of-sample with every parameter moved ±20%.
 import type { Candle } from "../core/types.js";
 import { DEFAULT_BACKTEST, runBacktest, type BacktestConfig } from "../backtest/engine.js";
-import { acceptance, computeMetrics, formatMetrics, groupBy } from "../backtest/metrics.js";
+import { acceptance, computeMetrics, formatMetrics, formatProfitFactor, groupBy, perturbParam } from "../backtest/metrics.js";
 import { csvPath, loadCsv } from "../data/klines.js";
 import { createTrendBreakout, DEFAULT_TREND_BREAKOUT, type TrendBreakoutParams } from "../strategy/trendBreakout.js";
+import { STRATEGY_WINDOW } from "../strategy/types.js";
 import { dateMs, parseArgs, str } from "./args.js";
 
 const a = parseArgs();
@@ -36,7 +37,9 @@ const slice = (start: number, end: number, warmup: number) => {
 
 function run(params: TrendBreakoutParams, start: number, end: number) {
   const strat = createTrendBreakout(params);
-  const res = runBacktest(strat, slice(start, end, strat.warmup), { ...cfg, tradeFromMs: start });
+  // Warm-up = the full strategy window, so indicators on the first in-window candle match
+  // what the live engine computes from its STRATEGY_WINDOW-candle fetch.
+  const res = runBacktest(strat, slice(start, end, STRATEGY_WINDOW), { ...cfg, tradeFromMs: start });
   res.equityCurve = res.equityCurve.filter((p) => p.time >= start);
   return { res, m: computeMetrics(res, cfg.initialEquity) };
 }
@@ -69,9 +72,9 @@ if (a.robustness) {
   for (const key of Object.keys(DEFAULT_TREND_BREAKOUT) as (keyof TrendBreakoutParams)[]) {
     for (const f of [0.8, 1.2]) {
       const base = DEFAULT_TREND_BREAKOUT[key];
-      const v = Number.isInteger(base) ? Math.max(1, Math.round(base * f)) : base * f;
+      const v = perturbParam(key, base, f);
       const { m } = run({ ...DEFAULT_TREND_BREAKOUT, [key]: v }, split, Infinity);
-      console.log(`  ${key.padEnd(14)} ${String(v).padStart(6)}  trades ${String(m.trades).padStart(4)}  PF ${m.profitFactor.toFixed(2)}  E ${m.expectancyR.toFixed(2)}R  DD ${(m.maxDrawdownPct * 100).toFixed(1)}%`);
+      console.log(`  ${key.padEnd(14)} ${String(Number(v.toPrecision(6))).padStart(6)}  trades ${String(m.trades).padStart(4)}  PF ${formatProfitFactor(m.profitFactor)}  E ${m.expectancyR.toFixed(2)}R  DD ${(m.maxDrawdownPct * 100).toFixed(1)}%`);
     }
   }
 }

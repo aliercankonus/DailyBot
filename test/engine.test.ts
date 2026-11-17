@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { MemoryRepo } from "../src/db/repo.js";
+import { MemoryRepo, type PositionRow } from "../src/db/repo.js";
+import { STRATEGY_WINDOW } from "../src/strategy/types.js";
 import { clientId, Engine, type EngineConfig, type KillSwitch } from "../src/engine/engine.js";
 import type { Notifier } from "../src/notify/notifier.js";
 import { createTrendBreakout } from "../src/strategy/trendBreakout.js";
@@ -8,6 +9,7 @@ import { candlesFromCloses, FakeExchange, H4, uptrend } from "./helpers.js";
 const cfg: EngineConfig = {
   symbols: ["BTCUSDT"], interval: "4h", intervalMs: H4, riskPerTrade: 0.01, maxLeverage: 3,
   maxOpenPositions: 3, dailyLossLimit: 0.03, maxDrawdown: 0.15, maxCandleDelayMs: 15 * 60_000,
+  roundTripCostPct: 0.002,
 };
 
 const strategy = createTrendBreakout();
@@ -162,5 +164,169 @@ describe("client ids", () => {
     const id = clientId("1000PEPEUSDT", Date.UTC(2030, 0, 1), `S${Date.UTC(2030, 0, 1).toString(36)}`);
     expect(id.length).toBeLessThanOrEqual(36);
     expect(id).toMatch(/^[.A-Z:/a-z0-9_-]{1,36}$/);
+  });
+});
+
+describe("engine hardening (review fixes)", () => {
+  it("adopts and protects a filled entry whose database insert failed", async () => {
+    at(signalIdx);
+    const orig = repo.insertPosition.bind(repo);
+    let fail = true;
+    repo.insertPosition = async (p: PositionRow) => {
+      if (fail) { fail = false; throw new Error("db down"); }
+      return orig(p);
+    };
+    await engine.tick();
+    expect(ex.positions.BTCUSDT).toBeDefined(); // filled on the exchange
+    expect(ex.stops).toHaveLength(0);           // not yet protected
+    ex.now += 60_000;
+    await engine.tick();
+    const pos = await repo.getOpenPosition("BTCUSDT");
+    expect(pos).not.toBeNull();
+    expect(ex.stops).toHaveLength(1);
+    expect((await repo.getState<KillSwitch>("killSwitch"))?.on ?? false).toBe(false);
+    expect(repo.events.some((e) => e.kind === "ENTRY_ADOPTED")).toBe(true);
+    expect(ex.calls.filter((c) => c.startsWith("market")).length).toBe(1); // no second entry
+  });
+
+  it("places the stop even when notifications fail", async () => {
+    engine = new Engine({
+      exchange: ex, repo, strategy, cfg, now: () => ex.now,
+      notifier: { send: async () => { throw new Error("telegram down"); } },
+    });
+    at(signalIdx);
+    await engine.tick();
+    expect(ex.stops).toHaveLength(1);
+  });
+
+  it("keeps the old stop when a trailing update fails for a transient reason", async () => {
+    at(signalIdx);
+    await engine.tick();
+    const first = ex.stops[0]!;
+    ex.placeStopError = new Error("HTTP 503");
+    at(signalIdx + 10);
+    await engine.tick();
+    expect(ex.positions.BTCUSDT).toBeDefined();
+    expect(ex.stops.map((s) => s.id)).toEqual([first.id]);
+    expect(repo.events.some((e) => e.kind === "TRAIL_FAILED")).toBe(true);
+  });
+
+  it("closes at market when the new trailing stop is already crossed (-2021)", async () => {
+    at(signalIdx);
+    await engine.tick();
+    ex.placeStopError = new Error("Binance /fapi/v1/order 400 code=-2021: Order would immediately trigger.");
+    at(signalIdx + 10);
+    await engine.tick();
+    expect(ex.positions.BTCUSDT).toBeUndefined();
+    expect(repo.positions[0]!.exitReason).toBe("TRAIL_STOP_CROSSED");
+  });
+
+  it("does not invent an exit price when exit fills are not visible yet", async () => {
+    at(signalIdx);
+    await engine.tick();
+    delete ex.positions.BTCUSDT; // gone on the exchange, but no fills reported
+    ex.stops = [];
+    ex.now += 60_000;
+    await engine.tick();
+    expect(repo.positions[0]!.status).toBe("OPEN");
+    ex.now += 11 * 60_000;
+    await engine.tick();
+    expect(repo.positions[0]!.status).toBe("CLOSED");
+    expect(repo.positions[0]!.exitReason).toBe("EXCHANGE_CLOSE_NO_FILLS");
+    expect(repo.positions[0]!.realizedPnl).toBeNull();
+  });
+
+  it("includes the entry commission in exchange-close bookkeeping", async () => {
+    at(signalIdx);
+    await engine.tick();
+    const entryTime = repo.positions[0]!.entryTime;
+    (ex.fills.BTCUSDT ??= []).push({ time: entryTime + 1000, price: 1, qty: 0, side: "BUY", realizedPnl: 0, commission: 2 });
+    ex.now += 60_000;
+    ex.triggerStop("BTCUSDT", ex.stops[0]!.stopPrice);
+    await engine.tick();
+    expect(repo.positions[0]!.fees).toBeCloseTo(2.5);
+  });
+
+  it("opens shorts with the stop above entry", async () => {
+    const down = candlesFromCloses(uptrend().map((x) => 200 - x));
+    let idx = -1;
+    for (let i = strategy.warmup; i <= down.length && idx < 0; i++) if (strategy.evaluate("BTCUSDT", down.slice(0, i))) idx = i - 1;
+    ex.candles.BTCUSDT = down;
+    ex.now = down[idx]!.closeTime + 60_000;
+    ex.mark.BTCUSDT = down[idx]!.close;
+    await engine.tick();
+    const pos = (await repo.getOpenPosition("BTCUSDT"))!;
+    expect(pos.side).toBe("SHORT");
+    expect(ex.stops[0]!.side).toBe("BUY");
+    expect(ex.stops[0]!.stopPrice).toBeGreaterThan(pos.entryPrice);
+  });
+
+  it("blocks entries after the daily loss limit", async () => {
+    at(signalIdx - 5);
+    await engine.tick(); // seeds dayStart at 10000
+    ex.balance = { equity: 9600, available: 9600 }; // -4% today, below the 15% drawdown switch
+    at(signalIdx);
+    await engine.tick();
+    expect(ex.positions.BTCUSDT).toBeUndefined();
+    expect(repo.signals.at(-1)!.gate).toBe("DAILY_LOSS_LIMIT");
+  });
+
+  it("alerts once for an unknown position, not every minute", async () => {
+    at(signalIdx - 5);
+    ex.positions.BTCUSDT = { symbol: "BTCUSDT", side: "SHORT", quantity: 1, entryPrice: 100 };
+    await engine.tick();
+    ex.now += 60_000;
+    await engine.tick();
+    ex.now += 60_000;
+    await engine.tick();
+    expect(sent.filter((t) => t.startsWith("Kill switch ON")).length).toBe(1);
+  });
+
+  it("does not re-arm the drawdown switch after the peak is reset", async () => {
+    at(signalIdx - 5);
+    await engine.tick();
+    ex.balance = { equity: 8000, available: 8000 };
+    ex.now += 60_000;
+    await engine.tick();
+    expect((await repo.getState<KillSwitch>("killSwitch"))?.on).toBe(true);
+    // What the API does on a manual OFF:
+    await repo.setState<KillSwitch>("killSwitch", { on: false, reason: "reviewed", at: ex.now, source: "manual" });
+    await repo.setState("equityPeak", null);
+    ex.now += 60_000;
+    await engine.tick();
+    expect((await repo.getState<KillSwitch>("killSwitch"))?.on).toBe(false);
+  });
+
+  it("gives the strategy the same fixed window the backtest uses", async () => {
+    at(signalIdx);
+    await engine.tick();
+    expect(ex.lastCandleLimit).toBe(STRATEGY_WINDOW);
+  });
+
+  it("still repairs stops when the balance call fails", async () => {
+    at(signalIdx);
+    await engine.tick();
+    ex.stops = [];
+    ex.failBalance = true;
+    ex.now += 60_000;
+    await engine.tick();
+    expect(ex.stops).toHaveLength(1);
+  });
+
+  it("skips the candle when its entry client id is spent", async () => {
+    at(signalIdx);
+    ex.marketOrder = async () => { throw new Error("CLIENT_ID_SPENT: previous order EXPIRED"); };
+    await engine.tick();
+    expect(await repo.getState(`lastProcessed:BTCUSDT`)).toBe(allCandles[signalIdx]!.openTime);
+    expect(await repo.getState("pendingEntry:BTCUSDT")).toBeNull();
+  });
+
+  it("sizes with round-trip costs counted as risk", async () => {
+    at(signalIdx);
+    await engine.tick();
+    const pos = (await repo.getOpenPosition("BTCUSDT"))!;
+    // risk = qty * (stop distance + price * cost) must not exceed 1% of 10000
+    const lossAtStop = pos.quantity * (Math.abs(pos.entryPrice - pos.initialStop) + pos.entryPrice * cfg.roundTripCostPct);
+    expect(lossAtStop).toBeLessThanOrEqual(100 + 1e-6);
   });
 });

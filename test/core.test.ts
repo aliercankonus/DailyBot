@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { atr, ema, priorHighest, rsi } from "../src/core/indicators.js";
 import { evaluateGates, type GateContext } from "../src/risk/gates.js";
-import { ceilToStep, floorToStep, fmt } from "../src/risk/precision.js";
+import { ceilToStep, decimalsOf, floorToStep, fmt } from "../src/risk/precision.js";
 import { sizePosition } from "../src/risk/sizing.js";
 import { createTrendBreakout } from "../src/strategy/trendBreakout.js";
 import { candlesFromCloses, FILTERS, uptrend } from "./helpers.js";
@@ -37,6 +37,16 @@ describe("precision", () => {
     expect(floorToStep(2.9999999999, 1)).toBe(3);
     expect(fmt(0.00001, 0.00001)).toBe("0.00001");
   });
+  it("handles exponent steps with a mantissa fraction", () => {
+    expect(decimalsOf(1.5e-7)).toBe(8);
+    expect(decimalsOf(1e-8)).toBe(8);
+    expect(decimalsOf(0.1)).toBe(1);
+    expect(decimalsOf(10)).toBe(0);
+  });
+  it("snaps large values without spurious rounding", () => {
+    expect(floorToStep(99999.99999, 0.0001)).toBe(99999.9999);
+    expect(floorToStep(123456.7, 0.1)).toBe(123456.7);
+  });
 });
 
 describe("sizing", () => {
@@ -67,6 +77,24 @@ describe("sizing", () => {
     if (r.ok) expect(r.notional / r.leverage).toBeLessThanOrEqual(95 + 1e-9);
   });
 
+  it("rejects NaN or non-positive inputs", () => {
+    expect(sizePosition({ ...base, stopPrice: 95, availableBalance: NaN }).ok).toBe(false);
+    expect(sizePosition({ ...base, stopPrice: 95, riskPerTrade: NaN }).ok).toBe(false);
+    expect(sizePosition({ ...base, stopPrice: 95, maxLeverage: 0 }).ok).toBe(false);
+    expect(sizePosition({ ...base, stopPrice: 100 }).ok).toBe(false);
+  });
+
+  it("counts round-trip costs as risk", () => {
+    const r = sizePosition({ ...base, stopPrice: 95, roundTripCostPct: 0.01 });
+    expect(r.ok && r.quantity).toBe(16.666);
+    if (r.ok) expect(r.riskAmount).toBeLessThanOrEqual(100);
+  });
+
+  it("uses the stricter of LOT_SIZE and MARKET_LOT_SIZE", () => {
+    const r = sizePosition({ ...base, stopPrice: 95, filters: { ...FILTERS, marketStepSize: 1, marketMaxQty: 5 } });
+    expect(r.ok && r.quantity).toBe(5);
+  });
+
   it("rejects below min notional", () => {
     const r = sizePosition({ ...base, equity: 10, availableBalance: 10, stopPrice: 50, riskPerTrade: 0.001 });
     expect(r.ok).toBe(false);
@@ -79,6 +107,18 @@ describe("gates", () => {
     maxOpenPositions: 3, dayPnlPct: 0, dailyLossLimit: 0.03, drawdownPct: 0, maxDrawdown: 0.15,
   };
   it("passes a clean context", () => expect(evaluateGates(ok).ok).toBe(true));
+  it("fails closed on NaN inputs", () => {
+    expect(evaluateGates({ ...ok, drawdownPct: NaN }).ok).toBe(false);
+    expect(evaluateGates({ ...ok, dayPnlPct: NaN }).ok).toBe(false);
+    expect(evaluateGates({ ...ok, openPositions: NaN }).ok).toBe(false);
+  });
+  it("limits are inclusive", () => {
+    expect(evaluateGates({ ...ok, drawdownPct: 0.15 }).ok).toBe(false);
+    expect(evaluateGates({ ...ok, drawdownPct: 0.1499 }).ok).toBe(true);
+    expect(evaluateGates({ ...ok, dayPnlPct: -0.03 }).ok).toBe(false);
+    expect(evaluateGates({ ...ok, dayPnlPct: -0.0299 }).ok).toBe(true);
+    expect(evaluateGates({ ...ok, openPositions: 2 }).ok).toBe(true);
+  });
   it.each([
     [{ killSwitch: true }, "KILL_SWITCH"],
     [{ dataFresh: false }, "DATA_STALE"],

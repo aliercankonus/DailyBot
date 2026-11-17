@@ -26,16 +26,18 @@ export type GateName =
   | "DAILY_LOSS_LIMIT"
   | "MAX_DRAWDOWN";
 
+// Comparisons are written as `!(value < limit)` so that NaN or a missing number BLOCKS
+// the entry instead of silently passing (fail closed).
 export function evaluateGates(c: GateContext): GateResult {
   if (c.killSwitch) return { ok: false, gate: "KILL_SWITCH", detail: "kill switch is on" };
   if (!c.dataFresh) return { ok: false, gate: "DATA_STALE", detail: "latest closed candle is missing or late" };
-  if (c.drawdownPct >= c.maxDrawdown)
+  if (!(c.drawdownPct < c.maxDrawdown))
     return { ok: false, gate: "MAX_DRAWDOWN", detail: `drawdown ${(c.drawdownPct * 100).toFixed(2)}% >= ${(c.maxDrawdown * 100).toFixed(2)}%` };
-  if (-c.dayPnlPct >= c.dailyLossLimit)
+  if (!(-c.dayPnlPct < c.dailyLossLimit))
     return { ok: false, gate: "DAILY_LOSS_LIMIT", detail: `day pnl ${(c.dayPnlPct * 100).toFixed(2)}% <= -${(c.dailyLossLimit * 100).toFixed(2)}%` };
   if (!c.hasSignal) return { ok: false, gate: "NO_SIGNAL", detail: "strategy returned no signal" };
   if (c.symbolHasPosition) return { ok: false, gate: "ALREADY_IN_POSITION", detail: "symbol already has a position" };
-  if (c.openPositions >= c.maxOpenPositions)
+  if (!(c.openPositions < c.maxOpenPositions))
     return { ok: false, gate: "MAX_OPEN_POSITIONS", detail: `${c.openPositions} >= ${c.maxOpenPositions}` };
   return { ok: true };
 }
