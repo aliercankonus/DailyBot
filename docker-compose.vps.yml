@@ -112,7 +112,7 @@ services:
     <<: *node
     environment:
       RESEARCH: ${RESEARCH:-0}
-      RESEARCH_STRATEGIES: ${RESEARCH_STRATEGIES:-trend pullback meanrev funding tsmom xsmom}
+      RESEARCH_STRATEGIES: ${RESEARCH_STRATEGIES:-donchian carry tsmom xsmom btchold ewhold}
       RESEARCH_UNIVERSE: ${RESEARCH_UNIVERSE:-BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,DOGEUSDT,AVAXUSDT,LINKUSDT,DOTUSDT,LTCUSDT,BCHUSDT,TRXUSDT,ATOMUSDT,ETCUSDT,XLMUSDT,FILUSDT,UNIUSDT,NEARUSDT,AAVEUSDT}
     command:
       - sh
@@ -122,8 +122,8 @@ services:
         U=$${RESEARCH_UNIVERSE};
         node dist/cli/download.js --interval 4h --from 2021-01-01 --dir /data &&
         node dist/cli/download.js --interval 1h --from 2021-01-01 --dir /data &&
-        node dist/cli/download.js --interval 1d --from 2021-01-01 --dir /data --symbols $$U &&
-        node dist/cli/download.js --funding --from 2021-01-01 --dir /data --symbols $$U || exit 1;
+        node dist/cli/download.js --interval 1d --from 2020-01-01 --dir /data --symbols $$U &&
+        node dist/cli/download.js --funding --from 2020-01-01 --dir /data --symbols $$U || exit 1;
         best=2;
         for s in $${RESEARCH_STRATEGIES}; do
           echo "==================== strategy $$s ====================";

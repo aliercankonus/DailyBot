@@ -5,6 +5,11 @@ import { getStrategy, STRATEGY_NAMES } from "../strategy/registry.js";
 import { createXsMomentum, DEFAULT_XS_MOMENTUM } from "../strategy/xsMomentum.js";
 import { runBacktest, type BacktestConfig, type BacktestResult } from "./engine.js";
 import { runPortfolioBacktest } from "./portfolio.js";
+import { runWeightsBacktest } from "./weights.js";
+import { createBtcHold, createEqualWeightHold } from "../strategy/benchmarks.js";
+import { createDonchianEnsemble, DEFAULT_DONCHIAN_ENSEMBLE } from "../strategy/donchianEnsemble.js";
+import { createFundingCarry, DEFAULT_FUNDING_CARRY } from "../strategy/fundingCarry.js";
+import type { WeightStrategy } from "../strategy/weights.js";
 
 /** Liquid USDⓈ-M perpetuals that traded on Binance through 2021-2026. Survivorship-biased: chosen today. */
 export const UNIVERSE_20 = [
@@ -15,6 +20,10 @@ export const CORE_5 = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT"];
 
 export interface CatalogEntry {
   label: string;
+  /** "trades": judged on trade statistics; "weights": judged on the equity curve (Sharpe, drawdown, yearly returns). */
+  kind: "trades" | "weights";
+  /** Parameters that are on/off switches: the robustness sweep skips them. */
+  switchKeys?: ReadonlySet<string>;
   interval: string;
   defaults: Record<string, number>;
   integerKeys: ReadonlySet<string>;
@@ -27,10 +36,35 @@ export interface CatalogEntry {
   run(params: Record<string, number>, data: Record<string, Candle[]>, cfg: BacktestConfig): BacktestResult;
 }
 
+function weightsEntry(
+  label: string, defaults: Record<string, number>, integerKeys: string[], switchKeys: string[],
+  make: (p: Record<string, number>) => WeightStrategy, needsFunding = false,
+): CatalogEntry {
+  return {
+    label, kind: "weights", interval: "1d", defaults, needsFunding,
+    integerKeys: new Set(integerKeys), switchKeys: new Set(switchKeys),
+    defaultSymbols: UNIVERSE_20, defaultRisk: 0.01, defaultMaxOpen: 20,
+    describe: (p) => make(p).name,
+    run: (p, data, cfg) => runWeightsBacktest(make(p), data, cfg),
+  };
+}
+
 export function getCatalogEntry(name: string): CatalogEntry {
+  if (name === "donchian") {
+    return weightsEntry("G", { ...DEFAULT_DONCHIAN_ENSEMBLE }, ["volLookback"], ["allowShort"],
+      (p) => createDonchianEnsemble({ ...DEFAULT_DONCHIAN_ENSEMBLE, ...p }));
+  }
+  if (name === "carry") {
+    return weightsEntry("H", { ...DEFAULT_FUNDING_CARRY }, ["lookbackDays", "rebalanceEvery"], [],
+      (p) => createFundingCarry({ ...DEFAULT_FUNDING_CARRY, ...p }), true);
+  }
+  if (name === "btchold") return weightsEntry("BM1", {}, [], [], () => createBtcHold());
+  if (name === "ewhold") return weightsEntry("BM2", {}, [], [], () => createEqualWeightHold());
   if (name === "xsmom") {
     return {
       label: "E",
+      kind: "trades",
+      switchKeys: new Set(["tsGate"]),
       interval: "1d",
       defaults: { ...DEFAULT_XS_MOMENTUM },
       integerKeys: new Set(["lookback", "topK", "bottomK", "rebalanceEvery", "tsGate"]),
@@ -46,6 +80,8 @@ export function getCatalogEntry(name: string): CatalogEntry {
   const daily = e.interval === "1d";
   return {
     label: e.label,
+    kind: "trades",
+    switchKeys: new Set(["allowShort"]),
     interval: e.interval,
     defaults: e.defaults,
     integerKeys: e.integerKeys,
@@ -59,4 +95,4 @@ export function getCatalogEntry(name: string): CatalogEntry {
   };
 }
 
-export const CATALOG_NAMES = [...STRATEGY_NAMES, "xsmom"];
+export const CATALOG_NAMES = [...STRATEGY_NAMES, "xsmom", "donchian", "carry", "btchold", "ewhold"];

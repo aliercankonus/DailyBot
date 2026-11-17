@@ -8,7 +8,7 @@
 import type { Candle } from "../core/types.js";
 import { DEFAULT_BACKTEST, type BacktestConfig } from "../backtest/engine.js";
 import { getCatalogEntry } from "../backtest/catalog.js";
-import { acceptance, computeMetrics, formatMetrics, formatProfitFactor, groupBy, perturbParam, yearlyConsistency } from "../backtest/metrics.js";
+import { acceptance, computeMetrics, equityAcceptance, equityMetrics, formatEquity, formatMetrics, formatProfitFactor, groupBy, perturbParam, yearlyConsistency } from "../backtest/metrics.js";
 import { csvPath, loadCsv } from "../data/klines.js";
 import { attachFunding, fundingCsvPath, loadFundingCsv } from "../data/funding.js";
 import type { FundingPoint } from "../exchange/types.js";
@@ -72,16 +72,17 @@ function run(params: Params, start: number, end: number) {
   // what the live engine computes from its STRATEGY_WINDOW-candle fetch.
   const res = entry.run(params, slice(start, end, STRATEGY_WINDOW), { ...cfg, tradeFromMs: start });
   res.equityCurve = res.equityCurve.filter((p) => p.time >= start);
-  return { res, m: computeMetrics(res, cfg.initialEquity) };
+  return { res, m: computeMetrics(res, cfg.initialEquity), eq: equityMetrics(res.equityCurve) };
 }
+const isWeights = entry.kind === "weights";
 
 console.log(`strategy ${entry.label}: ${entry.describe(DEFAULTS)}  interval ${interval}  symbols ${Object.keys(all).join(",")}`);
 console.log(`costs: taker ${cfg.takerFee * 100}%/side, slippage ${cfg.slippage * 100}%/fill, funding ${cfg.fundingRates ? `historical (${Object.keys(cfg.fundingRates).length} symbols)` : `${cfg.fundingPer8h * 100}%/8h flat`}  risk ${cfg.riskPerTrade * 100}%/trade, max ${cfg.maxOpenPositions} open\n`);
 
 const ins = run(DEFAULTS, 0, split);
-console.log(`== IN-SAMPLE (before ${new Date(split).toISOString().slice(0, 10)}) ==\n${formatMetrics(ins.m)}\n`);
+console.log(`== IN-SAMPLE (before ${new Date(split).toISOString().slice(0, 10)}) ==\n${isWeights ? formatEquity(ins.eq) : formatMetrics(ins.m)}\n`);
 const oos = run(DEFAULTS, split, Infinity);
-console.log(`== OUT-OF-SAMPLE (from ${new Date(split).toISOString().slice(0, 10)}) ==\n${formatMetrics(oos.m)}\n`);
+console.log(`== OUT-OF-SAMPLE (from ${new Date(split).toISOString().slice(0, 10)}) ==\n${isWeights ? formatEquity(oos.eq) : formatMetrics(oos.m)}\n`);
 
 console.log("per symbol (out-of-sample):");
 for (const [s, ts] of groupBy(oos.res.trades, (t) => t.symbol)) {
@@ -94,9 +95,11 @@ for (const [y, ts] of groupBy(full.res.trades, (t) => new Date(t.entryTime).getU
   console.log(`  ${y}  trades ${String(ts.length).padStart(4)}  net ${ts.reduce((x, t) => x + t.netPnl, 0).toFixed(2).padStart(10)}`);
 }
 
-const verdict = acceptance(oos.m);
-console.log("out-of-sample by year:");
-for (const y of yearlyConsistency(oos.res.trades)) {
+console.log(`== FULL PERIOD (all data, equity view) ==\n${formatEquity(full.eq)}\n`);
+
+const verdict = isWeights ? equityAcceptance(oos.eq) : acceptance(oos.m);
+if (!isWeights) console.log("out-of-sample by year:");
+for (const y of isWeights ? [] : yearlyConsistency(oos.res.trades)) {
   console.log(`  ${y.year}  trades ${String(y.trades).padStart(4)}  PF ${formatProfitFactor(y.profitFactor)}`);
   if (!(y.profitFactor > 1)) {
     verdict.pass = false;
@@ -108,10 +111,17 @@ console.log(`\nACCEPTANCE (out-of-sample): ${verdict.pass ? "PASS" : "FAIL"}${ve
 if (a.robustness) {
   console.log("\nrobustness (out-of-sample, each parameter ±20%):");
   for (const key of Object.keys(DEFAULTS)) {
+    // Switches and zero-valued parameters have no meaningful ±20% neighbour.
+    if (entry.switchKeys?.has(key) || DEFAULTS[key] === 0) continue;
     for (const f of [0.8, 1.2]) {
       const base = DEFAULTS[key]!;
       const v = perturbParam(key, base, f, entry.integerKeys);
-      const { m } = run({ ...DEFAULTS, [key]: v }, split, Infinity);
+      if (v === base) continue;
+      const { m, eq } = run({ ...DEFAULTS, [key]: v }, split, Infinity);
+      if (isWeights) {
+        console.log(`  ${key.padEnd(14)} ${String(Number(v.toPrecision(6))).padStart(8)}  Sharpe ${eq.sharpe.toFixed(2)}  CAGR ${(eq.cagr * 100).toFixed(1)}%  DD ${(eq.maxDrawdownPct * 100).toFixed(1)}%`);
+        continue;
+      }
       console.log(`  ${key.padEnd(14)} ${String(Number(v.toPrecision(6))).padStart(6)}  trades ${String(m.trades).padStart(4)}  PF ${formatProfitFactor(m.profitFactor)}  E ${m.expectancyR.toFixed(2)}R  DD ${(m.maxDrawdownPct * 100).toFixed(1)}%`);
     }
   }

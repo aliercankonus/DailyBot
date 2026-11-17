@@ -38,6 +38,8 @@ Binance USDⓈ-M futures bot (long + short) with a proven out-of-sample edge, ru
 - Funding carry works only delta-neutral (spot leg needed) and collapsed in 2025 (BIS WP 1087; arXiv 2510.14435). Extreme-funding contrarian evidence is weak. -> strategy D is a long shot.
 - Next candidates if needed: CTREND-style cross-sectional trend factor (Fieberg et al., JFQA 2025).
 
+- 2026-11-17: Added weight-based portfolio backtester (`src/backtest/weights.ts`: next-open execution, no-trade band, signed funding, MTM), G (`donchian`: 9-lookback Donchian ensemble, trailing midpoint stops, inverse-vol sizing, gross cap), H (`carry`: cross-sectional funding carry, dollar-neutral), benchmarks (`btchold`, `ewhold`). Equity metrics (CAGR, Sharpe, max DD, yearly returns) are printed for every strategy; weight strategies are accepted on OOS Sharpe >= 1.0, max DD <= 20%, every OOS year positive. Robustness sweep skips switches and zero-valued parameters. Daily data and funding now start 2020-01-01. Tests: 199 passing.
+
 ## Deployment
 - 2026-11-17: Hostinger VPS (KVM 2, Düsseldorf) Docker project `dailybot`, MODE=paper. db/api/engine healthy, migrate exit 0, engine ticking every 60s (~1.5s per tick). API on 127.0.0.1:8081. Secrets live in the project environment in hPanel.
 

@@ -106,3 +106,70 @@ export function formatMetrics(m: Metrics): string {
     `fees/funding  ${m.totalFees.toFixed(2)} / ${m.totalFunding.toFixed(2)} USDT`,
   ].join("\n");
 }
+
+export interface EquityMetrics {
+  cagr: number;
+  annualVol: number;
+  sharpe: number;
+  maxDrawdownPct: number;
+  /** Calendar-year returns (UTC) keyed by year. */
+  yearly: { year: number; ret: number; maxDd: number }[];
+}
+
+/**
+ * Metrics from an equity curve, comparable across strategies with any bar interval:
+ * the curve is resampled to the last point of each UTC day.
+ */
+export function equityMetrics(curve: { time: number; equity: number }[]): EquityMetrics {
+  const daily = new Map<number, number>();
+  for (const p of curve) daily.set(Math.floor(p.time / 86_400_000), p.equity);
+  const days = [...daily.entries()].sort((a, b) => a[0] - b[0]);
+  if (days.length < 2) return { cagr: 0, annualVol: 0, sharpe: 0, maxDrawdownPct: 0, yearly: [] };
+  const rets: number[] = [];
+  for (let i = 1; i < days.length; i++) rets.push(days[i]![1] / days[i - 1]![1] - 1);
+  const mean = rets.reduce((a, b) => a + b, 0) / rets.length;
+  const sd = Math.sqrt(rets.reduce((a, b) => a + (b - mean) ** 2, 0) / rets.length);
+  const years = (days.at(-1)![0] - days[0]![0]) / 365;
+  const total = days.at(-1)![1] / days[0]![1];
+  let peak = days[0]![1];
+  let maxDd = 0;
+  const yearly = new Map<number, { start: number; end: number; peak: number; maxDd: number }>();
+  let prevEq = days[0]![1];
+  for (const [d, eq] of days) {
+    peak = Math.max(peak, eq);
+    maxDd = Math.max(maxDd, (peak - eq) / peak);
+    const y = new Date(d * 86_400_000).getUTCFullYear();
+    const cur = yearly.get(y) ?? { start: prevEq, end: eq, peak: prevEq, maxDd: 0 };
+    cur.end = eq;
+    cur.peak = Math.max(cur.peak, eq);
+    cur.maxDd = Math.max(cur.maxDd, (cur.peak - eq) / cur.peak);
+    yearly.set(y, cur);
+    prevEq = eq;
+  }
+  return {
+    cagr: years > 0 && total > 0 ? total ** (1 / years) - 1 : 0,
+    annualVol: sd * Math.sqrt(365),
+    sharpe: sd > 0 ? (mean / sd) * Math.sqrt(365) : 0,
+    maxDrawdownPct: maxDd,
+    yearly: [...yearly.entries()].map(([year, v]) => ({ year, ret: v.end / v.start - 1, maxDd: v.maxDd })),
+  };
+}
+
+/** Acceptance for weight (portfolio) strategies, judged on the out-of-sample equity curve. */
+export const EQUITY_ACCEPTANCE = { minSharpe: 1.0, maxDrawdownPct: 0.2 };
+
+export function equityAcceptance(m: EquityMetrics): { pass: boolean; failures: string[] } {
+  const f: string[] = [];
+  if (m.sharpe < EQUITY_ACCEPTANCE.minSharpe) f.push(`Sharpe ${m.sharpe.toFixed(2)} < ${EQUITY_ACCEPTANCE.minSharpe}`);
+  if (m.maxDrawdownPct > EQUITY_ACCEPTANCE.maxDrawdownPct) f.push(`max drawdown ${(m.maxDrawdownPct * 100).toFixed(1)}% > ${EQUITY_ACCEPTANCE.maxDrawdownPct * 100}%`);
+  for (const y of m.yearly) if (!(y.ret > 0)) f.push(`year ${y.year} return ${(y.ret * 100).toFixed(1)}% <= 0`);
+  return { pass: f.length === 0, failures: f };
+}
+
+export function formatEquity(m: EquityMetrics): string {
+  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  return [
+    `CAGR ${pct(m.cagr)}  vol ${pct(m.annualVol)}  Sharpe ${m.sharpe.toFixed(2)}  max DD ${pct(m.maxDrawdownPct)}`,
+    `yearly: ${m.yearly.map((y) => `${y.year} ${y.ret >= 0 ? "+" : ""}${pct(y.ret)} (dd ${pct(y.maxDd)})`).join(" | ")}`,
+  ].join("\n");
+}
