@@ -61,3 +61,12 @@ OOS per symbol: ETH +0.31R, SOL +0.24R, BTC +0.01R, BNB 0.00R, XRP −0.08R. 202
 Robustness (±20% per parameter): PF 0.98–1.15, no parameter value reaches the gate; trailAtr 2.4 drops to PF 0.98.
 
 **Phase 1 gate: FAIL** (PF 1.09 < 1.3, expectancy 0.11R < 0.3R, DD 35% > 20%). The edge is small and not robust enough for real money. Do not go live with this strategy. The paper engine keeps running to validate the infrastructure, not the strategy.
+
+### 2026-11-17 — B and C, 1h, same 5 coins, same costs (image af06212)
+
+| | IS trades | IS PF | OOS trades | OOS PF | OOS expectancy | OOS max DD | Years profitable |
+|---|---|---|---|---|---|---|---|
+| B pullback(4h ema20/50, rsi14@35, 1.5 ATR, 2R) | 1046 | 0.88 | 469 | 0.71 | −0.24R | 62% | 0 of 6 |
+| C mean-reversion(bb20x2, adx<20, 1.5 ATR, 24 bars) | 2325 | 0.61 | 1127 | 0.65 | −0.21R | 82% | 0 of 6 |
+
+Robustness: no ±20% variant of either reaches PF 1.0. **Both FAIL clearly.** Costs dominate on 1h: C paid 4403 USDT in fees on 1127 OOS trades. Conclusion: intraday indicator strategies on these coins have no edge after costs; focus on daily-horizon strategies (D/E/F).
