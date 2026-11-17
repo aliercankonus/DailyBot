@@ -70,3 +70,25 @@ Robustness (±20% per parameter): PF 0.98–1.15, no parameter value reaches the
 | C mean-reversion(bb20x2, adx<20, 1.5 ATR, 24 bars) | 2325 | 0.61 | 1127 | 0.65 | −0.21R | 82% | 0 of 6 |
 
 Robustness: no ±20% variant of either reaches PF 1.0. **Both FAIL clearly.** Costs dominate on 1h: C paid 4403 USDT in fees on 1127 OOS trades. Conclusion: intraday indicator strategies on these coins have no edge after costs; focus on daily-horizon strategies (D/E/F).
+
+### 2026-11-17 — A (re-run with real funding), D, E, F (image 5518637, historical signed funding for all)
+
+| | Universe / risk | IS trades | IS PF | OOS trades | OOS PF | OOS exp. | OOS max DD | OOS 2025 PF | OOS 2026 PF |
+|---|---|---|---|---|---|---|---|---|---|
+| A trend-breakout 4h | 5 coins, 1%, max 3 | 636 | 1.25 | 320 | 1.12 | 0.12R | 34.8% | 1.33 | 0.95 |
+| D funding crowding 1h | 5 coins, 1%, max 3 | 926 | 0.90 | 418 | 0.60 | −0.23R | 58.8% | 0.65 | 0.52 |
+| E xs-momentum 1d (top/bottom 4, weekly, TS gate) | 20 coins, 0.5%, max 8 | 644 | 1.33 | 315 | 0.91 | −0.02R | 6.3% | 0.90 | 0.91 |
+| F ts-momentum ensemble 1d (long only) | 20 coins, 0.5%, max 10 | 144 | 2.17 | 72 | 0.55 | −0.18R | 11.6% | 0.74 | 0.25 |
+
+Notes:
+- F with shorts allowed (robustness row): OOS 157 trades, PF 0.99, DD 8.5%. Long-only trend is hurt by the 2025-26 bear/chop regime, consistent with live trend ETFs (BTOP −15.9% in 2025).
+- E has low drawdown but no OOS edge; its IS edge (PF 1.33) disappeared after 2024, consistent with the literature on decaying cross-sectional momentum.
+- D loses in 4 of 6 years. Extreme-funding contrarian has no edge after costs here.
+- Robustness sweep flaw found: zero-valued params (exitScore) and switches (tsGate) are not perturbed meaningfully; fix before the next run.
+
+**All six candidates (A-F) FAIL.** No strategy is approved for real money.
+
+## Deep research (2026-11-17, second pass; second-hand from search summaries)
+- No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
+- The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
+- Closest candidates to test next: (G) daily Donchian ensemble, 9 lookbacks 5-360d, trailing stop at the channel midpoint, volatility targeting (Zarattini, Pagani & Barbon 2025); (H) cross-sectional funding carry, long the lowest third / short the highest third by 7-day average funding, dollar-neutral (weak evidence, holdout Sharpe ~1.1 claimed).
