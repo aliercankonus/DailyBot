@@ -9,6 +9,7 @@ import { closingSide, openingSide, type AccountBalance, type Exchange, type Stop
 import { evaluateGates } from "../risk/gates.js";
 import { sizePosition } from "../risk/sizing.js";
 import { STRATEGY_WINDOW, type Strategy } from "../strategy/types.js";
+import { attachFunding } from "../data/funding.js";
 import type { Notifier } from "../notify/notifier.js";
 
 export interface EngineConfig {
@@ -211,12 +212,18 @@ export class Engine {
 
   async onCandle(symbol: string, balance: AccountBalance): Promise<void> {
     const { cfg, strategy, exchange: ex, repo } = this.d;
-    const candles = await ex.getClosedCandles(symbol, cfg.interval, STRATEGY_WINDOW);
+    let candles = await ex.getClosedCandles(symbol, cfg.interval, STRATEGY_WINDOW);
     const last = candles.at(-1);
     if (!last) return;
     const lastKey = `lastProcessed:${symbol}`;
     const lastProcessed = (await repo.getState<number>(lastKey)) ?? 0;
     if (last.openTime <= lastProcessed) return;
+
+    if (strategy.needsFunding) {
+      // Same attachment rule as the backtest: the last rate settled at or before each close.
+      const funding = await ex.getFundingHistory(symbol, candles[0]!.openTime - 8 * 3600_000);
+      candles = attachFunding(candles, funding);
+    }
 
     const pos = await repo.getOpenPosition(symbol);
     if (pos) {

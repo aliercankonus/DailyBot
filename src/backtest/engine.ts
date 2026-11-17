@@ -13,7 +13,7 @@
 //    configured symbol order, the same order the live engine loops in. When several symbols
 //    signal on the same candle and maxOpenPositions is tight, earlier symbols win.
 import type { Candle, Side } from "../core/types.js";
-import type { SymbolFilters } from "../exchange/types.js";
+import type { FundingPoint, SymbolFilters } from "../exchange/types.js";
 import { sizePosition } from "../risk/sizing.js";
 import { STRATEGY_WINDOW, type Strategy } from "../strategy/types.js";
 
@@ -28,6 +28,11 @@ export interface BacktestConfig {
   filters?: Record<string, SymbolFilters>;
   /** Entries before this time are ignored (candles before it are indicator warm-up only). */
   tradeFromMs?: number;
+  /**
+   * Historical funding per symbol. When present, each settlement charges the real signed rate
+   * (longs pay positive funding, shorts receive it) instead of the flat fundingPer8h cost.
+   */
+  fundingRates?: Record<string, FundingPoint[]>;
 }
 
 export const DEFAULT_BACKTEST: BacktestConfig = {
@@ -94,6 +99,11 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
     for (const c of data[s]!) times.add(c.openTime);
   }
   const timeline = [...times].sort((a, b) => a - b);
+  // Settlement times are snapped to the 8h grid (Binance fundingTime can be a few ms late).
+  const rateLookup = new Map<string, Map<number, number>>();
+  for (const [sym, pts] of Object.entries(cfg.fundingRates ?? {})) {
+    rateLookup.set(sym, new Map(pts.map((f) => [Math.round(f.time / EIGHT_HOURS) * EIGHT_HOURS, f.rate])));
+  }
 
   let cash = cfg.initialEquity; // realized equity
   const open = new Map<string, OpenPos>();
@@ -156,7 +166,7 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
       // 1b) Strategy exit decided on the previous close fills at this candle's open.
       const exiting = open.get(s);
       if (exiting?.exitPending) {
-        exiting.funding += fundingSettlements(c.openTime, c.openTime, exiting.entryTime) * c.open * exiting.quantity * cfg.fundingPer8h;
+        exiting.funding += fundingCost(exiting, c.openTime, c.openTime, c.open);
         closePos(exiting, c.open, c.openTime, "SIGNAL");
       }
 
@@ -164,8 +174,7 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
       const pos = open.get(s);
       if (pos) {
         // Pessimistic: settlements inside this candle are charged even if the stop hits in it.
-        const n = fundingSettlements(c.openTime, c.closeTime, pos.entryTime);
-        pos.funding += n * c.open * pos.quantity * cfg.fundingPer8h;
+        pos.funding += fundingCost(pos, c.openTime, c.closeTime, c.open);
         if (pos.side === "LONG" && c.low <= pos.stop) closePos(pos, Math.min(c.open, pos.stop), c.openTime, "STOP");
         else if (pos.side === "SHORT" && c.high >= pos.stop) closePos(pos, Math.max(c.open, pos.stop), c.openTime, "STOP");
       }
@@ -207,6 +216,18 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
   }
   return { trades, equityCurve, finalEquity: cash };
 
+  /** Funding paid (positive) or received (negative) for settlements in [from, to] after entry. */
+  function fundingCost(p: OpenPos, from: number, to: number, price: number): number {
+    const rates = rateLookup.get(p.symbol);
+    let cost = 0;
+    for (const t of settlementTimes(from, to, p.entryTime)) {
+      const rate = rates ? (rates.get(t) ?? 0) : cfg.fundingPer8h;
+      // Without data the flat rate is charged to both sides (conservative); with data it is signed.
+      cost += rates ? (p.side === "LONG" ? rate : -rate) * price * p.quantity : rate * price * p.quantity;
+    }
+    return cost;
+  }
+
   /** cash + unrealized PnL at each position's last known mark - accrued funding. */
   function markToMarket(): number {
     let eq = cash;
@@ -223,6 +244,14 @@ export function fundingSettlements(fromMs: number, toMs: number, afterMs: number
   if (toMs < lo) return 0;
   const first = Math.ceil(lo / EIGHT_HOURS) * EIGHT_HOURS;
   return first > toMs ? 0 : Math.floor((toMs - first) / EIGHT_HOURS) + 1;
+}
+
+/** The settlement timestamps counted by fundingSettlements, in order. */
+export function settlementTimes(fromMs: number, toMs: number, afterMs: number): number[] {
+  const n = fundingSettlements(fromMs, toMs, afterMs);
+  if (n === 0) return [];
+  const first = Math.ceil(Math.max(fromMs, afterMs + 1) / EIGHT_HOURS) * EIGHT_HOURS;
+  return Array.from({ length: n }, (_, k) => first + k * EIGHT_HOURS);
 }
 
 function marginInUse(open: Map<string, OpenPos>): number {

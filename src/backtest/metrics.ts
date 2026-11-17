@@ -57,6 +57,21 @@ export function acceptance(m: Metrics): { pass: boolean; failures: string[] } {
   return { pass: f.length === 0, failures: f };
 }
 
+/**
+ * Consistency check across calendar years of a trade list: every year with trades must have a
+ * profit factor above 1. Guards against one lucky period carrying the whole result, which matters
+ * more the more strategies are tried on the same data.
+ */
+export function yearlyConsistency(trades: BacktestTrade[]): { year: number; trades: number; profitFactor: number }[] {
+  const out: { year: number; trades: number; profitFactor: number }[] = [];
+  for (const [year, ts] of groupBy(trades, (t) => new Date(t.entryTime).getUTCFullYear())) {
+    const win = ts.filter((t) => t.netPnl > 0).reduce((a, t) => a + t.netPnl, 0);
+    const loss = -ts.filter((t) => t.netPnl <= 0).reduce((a, t) => a + t.netPnl, 0);
+    out.push({ year, trades: ts.length, profitFactor: loss > 0 ? win / loss : win > 0 ? Infinity : 0 });
+  }
+  return out.sort((a, b) => a.year - b.year);
+}
+
 export function groupBy<K extends string | number>(trades: BacktestTrade[], key: (t: BacktestTrade) => K) {
   const out = new Map<K, BacktestTrade[]>();
   for (const t of trades) out.set(key(t), [...(out.get(key(t)) ?? []), t]);

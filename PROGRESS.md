@@ -30,6 +30,14 @@ Binance USDⓈ-M futures bot (long + short) with a proven out-of-sample edge, ru
 
 - 2026-11-17: Added strategies B (`pullback`, 1h, 4h trend from complete 4h buckets only) and C (`meanrev`, 1h, Bollinger + ADX regime). Strategies may now declare `shouldExit` (target / time stop): backtest fills it at the next open, the engine closes at market. Live `entryCandleOpenTime` is now the fill candle, matching the backtest. Engine selects the strategy with `STRATEGY`; the strategy sets the interval. Tests: 158 passing.
 
+- 2026-11-17: Literature review (see "Research" below). Added D (`funding`, 1h, funding z-score crowding: short extreme positive / long extreme negative), E (`xsmom`, daily cross-sectional momentum on 20 coins, top/bottom 4, weekly, with a time-series gate; portfolio backtester `src/backtest/portfolio.ts`, backtest only, no live support yet) and F (`tsmom`, daily time-series momentum ensemble over 5-360 day lookbacks, long only by default). Backtests now charge real signed funding where history exists. Acceptance adds a per-year consistency rule (every out-of-sample year PF > 1) because many strategies are now tested on the same data. Tests: 186 passing.
+
+## Research (2026-11-17, from abstracts; full texts were not reachable)
+- Strongest recent evidence: multi-lookback trend/time-series momentum with volatility sizing on top coins (Zarattini, Pagani & Barbon 2025; Liu & Tsyvinski, RFS 2021). -> strategy F.
+- Cross-sectional momentum: weak net of costs, decays after 2022 (Han, Kang & Ryu 2023; Grobys et al. 2025); a time-series gate helps. -> strategy E with gate.
+- Funding carry works only delta-neutral (spot leg needed) and collapsed in 2025 (BIS WP 1087; arXiv 2510.14435). Extreme-funding contrarian evidence is weak. -> strategy D is a long shot.
+- Next candidates if needed: CTREND-style cross-sectional trend factor (Fieberg et al., JFQA 2025).
+
 ## Deployment
 - 2026-11-17: Hostinger VPS (KVM 2, Düsseldorf) Docker project `dailybot`, MODE=paper. db/api/engine healthy, migrate exit 0, engine ticking every 60s (~1.5s per tick). API on 127.0.0.1:8081. Secrets live in the project environment in hPanel.
 

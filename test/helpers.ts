@@ -90,6 +90,12 @@ export class FakeExchange implements Exchange {
   async cancelStop(_symbol: string, id: string) { this.calls.push(`cancel ${id}`); this.stops = this.stops.filter((s) => s.id !== id); }
   async getOpenStops(symbol: string) { return this.stops.filter((s) => s.symbol === symbol); }
   async getFills(symbol: string, since: number) { return (this.fills[symbol] ?? []).filter((f) => f.time >= since); }
+  funding: Record<string, { time: number; rate: number }[]> = {};
+  fundingCalls = 0;
+  async getFundingHistory(symbol: string, start: number) {
+    this.fundingCalls++;
+    return (this.funding[symbol] ?? []).filter((f) => f.time >= start);
+  }
 
   /** Simulate the exchange triggering the stop. */
   triggerStop(symbol: string, price: number) {

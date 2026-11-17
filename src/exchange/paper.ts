@@ -12,7 +12,7 @@
 import type { Candle } from "../core/types.js";
 import { floorToStep } from "../risk/precision.js";
 import { closingSide } from "./types.js";
-import type { AccountBalance, Exchange, ExchangePosition, Fill, StopOrder, SymbolFilters, TradeFill } from "./types.js";
+import type { AccountBalance, Exchange, ExchangePosition, Fill, StopOrder, SymbolFilters, TradeFill, FundingPoint } from "./types.js";
 
 export interface MarketData {
   getServerTime(): Promise<number>;
@@ -20,6 +20,7 @@ export interface MarketData {
   getFilters(symbol: string): Promise<SymbolFilters>;
   getMarkPrice(symbol: string): Promise<number>;
   getKlinesSince(symbol: string, interval: string, startTime: number): Promise<Candle[]>;
+  getFundingHistory(symbol: string, startTime: number): Promise<FundingPoint[]>;
 }
 
 type PaperPosition = { side: "LONG" | "SHORT"; quantity: number; entryPrice: number; leverage: number };
@@ -144,6 +145,10 @@ export class PaperExchange implements Exchange {
   async getOpenStops(symbol: string): Promise<StopOrder[]> {
     await this.checkStops(symbol);
     return this.state.stops.filter((s) => s.symbol === symbol);
+  }
+
+  getFundingHistory(symbol: string, startTime: number): Promise<FundingPoint[]> {
+    return this.md.getFundingHistory(symbol, startTime);
   }
 
   async getFills(symbol: string, sinceMs: number): Promise<TradeFill[]> {

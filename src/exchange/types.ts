@@ -45,6 +45,13 @@ export interface StopOrder {
   quantity: number;
 }
 
+export interface FundingPoint {
+  /** Settlement time (ms). */
+  time: number;
+  /** Fraction per 8h; positive means longs pay shorts. */
+  rate: number;
+}
+
 export interface TradeFill {
   time: number;
   price: number;
@@ -79,6 +86,8 @@ export interface Exchange {
   getOpenStops(symbol: string): Promise<StopOrder[]>;
   /** Fills for the symbol since `sinceMs`, oldest first. */
   getFills(symbol: string, sinceMs: number): Promise<TradeFill[]>;
+  /** Settled funding rates since `startTime`, oldest first (public data). */
+  getFundingHistory(symbol: string, startTime: number): Promise<FundingPoint[]>;
 }
 
 export const closingSide = (side: Side): "BUY" | "SELL" => (side === "LONG" ? "SELL" : "BUY");

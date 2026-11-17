@@ -9,7 +9,7 @@
 import { createHmac } from "node:crypto";
 import type { Candle } from "../core/types.js";
 import { ceilToStep, floorToStep, fmt } from "../risk/precision.js";
-import type { AccountBalance, Exchange, ExchangePosition, Fill, StopOrder, SymbolFilters, TradeFill } from "./types.js";
+import type { AccountBalance, Exchange, ExchangePosition, Fill, StopOrder, SymbolFilters, TradeFill, FundingPoint } from "./types.js";
 
 export type StopOrderApi = "algo" | "legacy";
 
@@ -395,6 +395,18 @@ export class BinanceFutures implements Exchange {
    * has no asset field, so net PnL is overstated by that fee. Binance may cap a
    * startTime-only query to a 7-day window; callers should not ask for older history.
    */
+  async getFundingHistory(symbol: string, startTime: number): Promise<FundingPoint[]> {
+    const out: FundingPoint[] = [];
+    let cursor = startTime;
+    for (let page = 0; page < 50; page++) {
+      const rows = await this.request<any[]>("GET", "/fapi/v1/fundingRate", { symbol, startTime: cursor, limit: 1000 });
+      for (const r of rows) out.push({ time: Number(r.fundingTime), rate: Number(r.fundingRate) });
+      if (rows.length < 1000) break;
+      cursor = out.at(-1)!.time + 1;
+    }
+    return out;
+  }
+
   async getFills(symbol: string, sinceMs: number): Promise<TradeFill[]> {
     const out: TradeFill[] = [];
     let page = await this.request<any[]>("GET", "/fapi/v1/userTrades", { symbol, startTime: sinceMs, limit: FILLS_PAGE }, true);

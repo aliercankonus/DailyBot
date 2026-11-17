@@ -15,6 +15,8 @@ export interface Strategy {
   readonly name: string;
   /** Candle interval the strategy is designed for, e.g. "4h". Live and backtest both use it. */
   readonly interval: string;
+  /** When true, candles carry `fundingRate` (live engine and backtest both attach it). */
+  readonly needsFunding?: boolean;
   /** Minimum number of closed candles needed before evaluate() can return a signal. */
   readonly warmup: number;
   /** Entry decision on the last candle of `candles`. */
