@@ -7,8 +7,9 @@ Kaynak kod VPS'e kopyalanmaz. GitHub Actions her `main` push'unda testleri çal�
 
 1. hPanel → VPS → Docker Manager → yeni proje `dailybot`, içerik olarak `docker-compose.vps.yml`.
 2. Proje ortam değişkenleri: `POSTGRES_PASSWORD` ve `API_TOKEN` (ikisi de uzun rastgele değer) zorunlu; geri kalanlar varsayılan olarak güvenli (`MODE=paper`).
-3. `research` servisi kurulumda 4h veriyi indirip backtest raporunu loglarına yazar ve kapanır.
-4. Güncelleme: yeni imaj basıldıktan sonra projeyi "Update" ile yenile.
+3. `RESEARCH=1` ise `research` servisi 4h veriyi indirip backtest raporunu loglarına yazar ve kapanır (çıkış kodu: 0 = kabul kriterleri geçti, 2 = kaldı). Rapor okunduktan sonra `RESEARCH=0` yapılır.
+4. Canlıya geçmeden önce `IMAGE_TAG` bir commit sha'sına sabitlenir; böylece `main`'e yapılan her push canlı kodu değiştirmez.
+5. Güncelleme: yeni imaj basıldıktan sonra projeyi "Update" ile yenile.
 
 API `127.0.0.1:8081`'de dinler (8080 signal-desk'e ait).
 

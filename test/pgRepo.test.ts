@@ -44,6 +44,11 @@ describe.skipIf(!url)("PgRepo (postgres)", () => {
     expect(await repo.getOpenPosition("BTCUSDT")).toBeNull();
     const closed = await repo.listClosedSince(0);
     expect(closed[0]!.exitPrice).toBe(51000);
+    await repo.insertPosition({ ...row("c"), status: "CLOSED", exitTime: 1_700_000_200_000 });
+    const latest = await repo.listClosed(1);
+    expect(latest.map((p) => p.id)).toEqual(["c"]);
+    expect(latest[0]!.exitTime).toBe(1_700_000_200_000);
+    expect((await repo.listClosed(10)).map((p) => p.id)).toEqual(["c", "a"]);
   });
 
   it("stores state, signals, events and equity", async () => {
