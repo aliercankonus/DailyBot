@@ -2,33 +2,24 @@
 # The image is built and pushed to GHCR by .github/workflows/ci.yml on every push to main.
 # Required project environment: POSTGRES_PASSWORD, API_TOKEN. Everything else has safe defaults
 # (MODE=paper: live public market data, simulated account, no API keys).
+# Before testnet/live, pin IMAGE_TAG to a commit sha tag (see .env.example).
 #
 # Port 8080 on this VPS belongs to signal-desk; this project's API uses 127.0.0.1:8081.
+#
+# Each service only receives the variables it needs: Binance and Telegram secrets go to the
+# engine only, API_TOKEN to the api only, and research gets nothing secret.
 
-x-app: &app
-  image: ghcr.io/aliercankonus/dailybot:main
-  environment: &appenv
-    MODE: ${MODE:-paper}
-    CONFIRM_LIVE: ${CONFIRM_LIVE:-}
-    BINANCE_API_KEY: ${BINANCE_API_KEY:-}
-    BINANCE_API_SECRET: ${BINANCE_API_SECRET:-}
-    BINANCE_BASE_URL: ${BINANCE_BASE_URL:-}
-    BINANCE_STOP_API: ${BINANCE_STOP_API:-algo}
-    SYMBOLS: ${SYMBOLS:-BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT}
-    INTERVAL: ${INTERVAL:-4h}
-    RISK_PER_TRADE: ${RISK_PER_TRADE:-0.005}
-    MAX_LEVERAGE: ${MAX_LEVERAGE:-3}
-    MAX_OPEN_POSITIONS: ${MAX_OPEN_POSITIONS:-3}
-    DAILY_LOSS_LIMIT: ${DAILY_LOSS_LIMIT:-0.03}
-    MAX_DRAWDOWN: ${MAX_DRAWDOWN:-0.15}
-    PAPER_START_BALANCE: ${PAPER_START_BALANCE:-10000}
-    TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
-    TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
-    API_TOKEN: ${API_TOKEN:?set API_TOKEN}
-    DATABASE_URL: postgres://trader:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/trader
+x-node: &node
+  image: ghcr.io/aliercankonus/dailybot:${IMAGE_TAG:-main}
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
   logging:
     driver: json-file
     options: { max-size: "10m", max-file: "3" }
+
+x-db-url: &dburl postgres://trader:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/trader
 
 services:
   db:
@@ -47,24 +38,60 @@ services:
       retries: 20
 
   migrate:
-    <<: *app
+    <<: *node
     command: ["node", "dist/cli/migrate.js"]
+    environment:
+      MODE: ${MODE:-paper}
+      DATABASE_URL: *dburl
     depends_on:
       db: { condition: service_healthy }
     restart: "no"
 
   engine:
-    <<: *app
+    <<: *node
     command: ["node", "dist/cli/engine.js"]
+    environment:
+      MODE: ${MODE:-paper}
+      CONFIRM_LIVE: ${CONFIRM_LIVE:-}
+      BINANCE_API_KEY: ${BINANCE_API_KEY:-}
+      BINANCE_API_SECRET: ${BINANCE_API_SECRET:-}
+      BINANCE_BASE_URL: ${BINANCE_BASE_URL:-}
+      BINANCE_STOP_API: ${BINANCE_STOP_API:-auto}
+      SYMBOLS: ${SYMBOLS:-BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT}
+      INTERVAL: ${INTERVAL:-4h}
+      RISK_PER_TRADE: ${RISK_PER_TRADE:-0.005}
+      MAX_LEVERAGE: ${MAX_LEVERAGE:-3}
+      MAX_OPEN_POSITIONS: ${MAX_OPEN_POSITIONS:-3}
+      DAILY_LOSS_LIMIT: ${DAILY_LOSS_LIMIT:-0.03}
+      MAX_DRAWDOWN: ${MAX_DRAWDOWN:-0.15}
+      PAPER_START_BALANCE: ${PAPER_START_BALANCE:-10000}
+      TAKER_FEE: ${TAKER_FEE:-0.0005}
+      SLIPPAGE: ${SLIPPAGE:-0.0005}
+      TICK_SECONDS: ${TICK_SECONDS:-60}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DATABASE_URL: *dburl
     depends_on:
       migrate: { condition: service_completed_successfully }
     mem_limit: 384m
     restart: unless-stopped
+    # The engine's own shutdown deadline is 45s; this leaves room for it to persist and exit.
     stop_grace_period: 60s
+    healthcheck:
+      # Unhealthy when no tick has succeeded for 5 minutes (the engine touches this file after each one).
+      test: ["CMD", "node", "-e", "const s=require('fs').statSync('/tmp/engine-heartbeat');process.exit(Date.now()-s.mtimeMs<300000?0:1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 2
+      start_period: 3m
 
   api:
-    <<: *app
+    <<: *node
     command: ["node", "dist/cli/api.js"]
+    environment:
+      MODE: ${MODE:-paper}
+      API_TOKEN: ${API_TOKEN:?set API_TOKEN}
+      DATABASE_URL: *dburl
     depends_on:
       migrate: { condition: service_completed_successfully }
     ports:
@@ -77,21 +104,25 @@ services:
       timeout: 5s
       retries: 3
 
-  # One-shot research job: downloads 4h candles from 2021 and prints the backtest report to
-  # its logs, then exits. Re-runs on every project update. Read it with the project logs.
+  # Opt-in research job: set RESEARCH=1 in the project environment, then update the project.
+  # It downloads 4h candles from 2021, prints the backtest report to its logs and exits with the
+  # real status code. With RESEARCH unset it logs "research skipped" and exits 0.
   research:
-    <<: *app
+    <<: *node
+    environment:
+      RESEARCH: ${RESEARCH:-0}
     command:
       - sh
       - -c
       - >-
+        if [ "$${RESEARCH}" != "1" ]; then echo "research skipped (set RESEARCH=1 to run)"; exit 0; fi;
         node dist/cli/download.js --interval 4h --from 2021-01-01 --dir /data &&
         node dist/cli/backtest.js --interval 4h --split 2025-01-01 --dir /data --robustness;
-        echo "research finished with exit code $$?"
+        status=$$?; echo "research finished with exit code $$status"; exit $$status
     volumes:
       - research:/data
-    mem_limit: 1g
-    cpus: 1.0
+    mem_limit: 768m
+    cpus: 0.75
     restart: "no"
 
 volumes:
