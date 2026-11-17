@@ -90,6 +90,25 @@ Notes:
 
 **All six candidates (A-F) FAIL.** No strategy is approved for real money.
 
+### 2026-11-17 — G, H, E, F and benchmarks, daily, 20 coins, data from 2020 (image 7c365bd)
+
+Calendar-year returns (full-period run; G and E/F size risk conservatively, so compare Sharpe and sign, not raw %):
+
+| | 2020 | 2021 | 2022 | 2023 | 2024 | 2025 | 2026 YTD | CAGR | Sharpe | Max DD | OOS (2025+) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| G Donchian ensemble (long only) | +2.2% | +0.6% | −0.4% | +4.6% | +15.2% | +0.4% | −1.5% | 2.9% | 0.85 | 4.3% | Sharpe −0.34 FAIL |
+| H funding carry (dollar-neutral) | −8.7% | +171% | −9.9% | −14.8% | +2.9% | +23.0% | +22.1% | 17.0% | 0.76 | 38.2% | Sharpe 0.60 FAIL |
+| E xs-momentum | +6.1% | +11.1% | −3.5% | +3.8% | +20.2% | −2.0% | −2.1% | 4.6% | 0.64 | 11.0% | PF 0.91 FAIL |
+| F ts-momentum (long only) | +0.3% | +10.6% | −3.4% | +10.2% | +17.8% | −1.1% | −4.4% | 4.1% | 0.36 | 28.8% | PF 0.55 FAIL |
+| BM1 BTC buy & hold | +241% | +17% | −66% | +138% | +97% | −11% | −29% | 22.5% | 0.64 | 79.4% | — |
+| BM2 equal-weight 20 coins | +146% | +501% | −67% | +112% | +72% | −37% | −26% | 36.0% | 0.80 | 76.3% | — |
+
+Findings:
+- No strategy is profitable in every year; none passes the out-of-sample gate.
+- G has the best full-period Sharpe (0.85) with tiny drawdowns, and the typical trend profile: small losses in 2022/2025/2026 while benchmarks lost 11-67%. Its sizing under-shoots the 25% vol target (realised vol 3.7%) because of the 1/N risk budget; returns scale with exposure, Sharpe does not.
+- H is fragile: 2021 (+171%) carries the whole result, 2022-23 lose, and the 2025 result differs between runs that start on different days (+5.4% vs +23.0%) — path/rebalance-day dependent.
+- E and F: same profile as G but weaker.
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
