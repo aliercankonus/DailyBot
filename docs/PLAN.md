@@ -14,9 +14,10 @@ Kararlar: TypeScript, Binance USDⓈ-M Futures (long + short, isolated margin, o
 ## Faz 1: Stratejiyi kanıtla
 - [x] Gelecek verisi sızdırmayan backtest (sonraki mumun açılışında giriş, high/low ile stop, komisyon + kayma + funding).
 - [x] Aday strateji A: trend kırılımı (Donchian 20 + EMA 50/200 filtresi + ATR stop ve trailing stop).
-- [ ] VPS'te 3+ yıllık veri indir: `npm run download -- --interval 4h --from 2021-01-01`.
-- [ ] `npm run backtest -- --split 2025-01-01 --robustness` çalıştır, sonucu `PROGRESS.md`'ye yaz.
-- [ ] Gerekirse aday B (1h pullback, 4h trend filtresi) ve C (ortalamaya dönüş) eklenir; her biri en fazla 5–6 parametre.
+- [x] VPS'te 2021'den itibaren 4h ve 1h veri indirildi (`research` servisi).
+- [x] Aday A backtest edildi: kabul kriterlerini GEÇEMEDİ (bkz. `PROGRESS.md`).
+- [x] Aday B (1h pullback, 4h trend filtresi) ve C (1h ortalamaya dönüş) eklendi; her biri 6 parametre.
+- [ ] B ve C backtest sonuçları `PROGRESS.md`'ye yazılır: `npm run backtest -- --strategy pullback|meanrev --split 2025-01-01 --robustness`.
 
 **Kapı (yalnızca out-of-sample):** ≥ 100 trade, Profit Factor ≥ 1,3, beklenen getiri ≥ 0,3R, maksimum düşüş ≤ %20, ±%20 parametre değişiminde sonuç çökmüyor. Hiçbir aday geçmezse **dur**; motoru canlıya almak para kaybettirir.
 

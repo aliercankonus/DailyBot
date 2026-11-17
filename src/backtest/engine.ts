@@ -1,6 +1,7 @@
 // Portfolio backtester. Rules that keep it honest:
 //  * The strategy sees only closed candles [0..i]. Entries fill at the NEXT candle's open.
 //  * Stops are checked against each candle's high/low. A gap through the stop fills at the open.
+//  * A strategy exit (shouldExit) decided on a close fills at the NEXT candle's open.
 //  * Every fill pays taker fee + slippage. Open positions pay funding at each 8h UTC settlement
 //    (00:00, 08:00, 16:00) that falls inside a held candle strictly after entry, on mark notional
 //    (quantity x that candle's open).
@@ -48,7 +49,7 @@ export interface BacktestTrade {
   exitPrice: number;
   quantity: number;
   initialStop: number;
-  exitReason: "STOP" | "END";
+  exitReason: "STOP" | "SIGNAL" | "END";
   grossPnl: number;
   fees: number;
   funding: number;
@@ -77,6 +78,8 @@ interface OpenPos {
   funding: number;
   /** Last known close of this symbol (entry price until the first close is seen). */
   mark: number;
+  /** Strategy asked to exit on the previous close; filled at this candle's open. */
+  exitPending: boolean;
 }
 
 const EIGHT_HOURS = 8 * 3600_000;
@@ -143,11 +146,18 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
               open.set(s, {
                 symbol: s, side: pend.side, entryTime: c.openTime, entryCandleOpenTime: c.openTime,
                 entryPrice: fillPrice, quantity: size.quantity, leverage: size.leverage, stop: pend.stop, initialStop: pend.stop,
-                fees: fee, funding: 0, mark: fillPrice,
+                fees: fee, funding: 0, mark: fillPrice, exitPending: false,
               });
             }
           }
         }
+      }
+
+      // 1b) Strategy exit decided on the previous close fills at this candle's open.
+      const exiting = open.get(s);
+      if (exiting?.exitPending) {
+        exiting.funding += fundingSettlements(c.openTime, c.openTime, exiting.entryTime) * c.open * exiting.quantity * cfg.fundingPer8h;
+        closePos(exiting, c.open, c.openTime, "SIGNAL");
       }
 
       // 2) Intrabar stop check (pessimistic: the stop is assumed hit before any favourable move).
@@ -164,10 +174,13 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
       const history = candles.slice(Math.max(0, i + 1 - STRATEGY_WINDOW), i + 1);
       const still = open.get(s);
       if (still) {
-        still.stop = strategy.updateStop(
-          { side: still.side, entryPrice: still.entryPrice, stop: still.stop, entryCandleOpenTime: still.entryCandleOpenTime },
-          history,
-        );
+        const view = {
+          side: still.side, entryPrice: still.entryPrice, stop: still.stop, initialStop: still.initialStop,
+          entryCandleOpenTime: still.entryCandleOpenTime,
+        };
+        // Same order as the live engine: a strategy exit takes precedence over a stop update.
+        if (strategy.shouldExit?.(view, history) && i + 1 < candles.length) still.exitPending = true;
+        else still.stop = strategy.updateStop(view, history);
       } else if (i + 1 < candles.length) {
         const sig = strategy.evaluate(s, history);
         if (sig) pending.set(s, { side: sig.side, stop: sig.stop });

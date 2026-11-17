@@ -220,7 +220,17 @@ export class Engine {
 
     const pos = await repo.getOpenPosition(symbol);
     if (pos) {
-      await this.trailStop(pos, candles);
+      const view: OpenPositionView = {
+        side: pos.side, entryPrice: pos.entryPrice, stop: pos.stop, initialStop: pos.initialStop,
+        entryCandleOpenTime: pos.entryCandleOpenTime,
+      };
+      // Same order as the backtest: a strategy exit takes precedence over a stop update.
+      if (strategy.shouldExit?.(view, candles)) {
+        await this.event("info", "STRATEGY_EXIT", symbol, `strategy exit on candle ${new Date(last.openTime).toISOString()}`);
+        await this.closeAtMarket(pos, "STRATEGY_EXIT");
+      } else {
+        await this.trailStop(pos, candles);
+      }
       await repo.setState(lastKey, last.openTime);
       return;
     }
@@ -321,7 +331,8 @@ export class Engine {
     const stop = p.side === "LONG" ? entryPrice - p.stopDistance : entryPrice + p.stopDistance;
     const row: PositionRow = {
       id: this.newId(), symbol, side: p.side, status: "OPEN",
-      quantity, entryPrice, entryTime: p.startedAt, entryCandleOpenTime: p.candleOpenTime,
+      // The fill happens during the candle after the signal candle, as in the backtest.
+      quantity, entryPrice, entryTime: p.startedAt, entryCandleOpenTime: p.candleOpenTime + this.d.cfg.intervalMs,
       initialStop: stop, stop, stopOrderId: null, leverage: p.leverage, riskAmount: p.stopDistance * quantity,
       exitPrice: null, exitTime: null, exitReason: null, realizedPnl: null, fees: null, strategy: this.d.strategy.name,
     };
@@ -334,7 +345,10 @@ export class Engine {
   }
 
   private async trailStop(pos: PositionRow, candles: Candle[]): Promise<void> {
-    const view: OpenPositionView = { side: pos.side, entryPrice: pos.entryPrice, stop: pos.stop, entryCandleOpenTime: pos.entryCandleOpenTime };
+    const view: OpenPositionView = {
+      side: pos.side, entryPrice: pos.entryPrice, stop: pos.stop, initialStop: pos.initialStop,
+      entryCandleOpenTime: pos.entryCandleOpenTime,
+    };
     const next = this.d.strategy.updateStop(view, candles);
     const tick = (await this.d.exchange.getFilters(pos.symbol)).tickSize;
     const improves = pos.side === "LONG" ? next >= pos.stop + tick : next <= pos.stop - tick;

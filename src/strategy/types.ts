@@ -13,6 +13,8 @@ export const STRATEGY_WINDOW = 1000;
  */
 export interface Strategy {
   readonly name: string;
+  /** Candle interval the strategy is designed for, e.g. "4h". Live and backtest both use it. */
+  readonly interval: string;
   /** Minimum number of closed candles needed before evaluate() can return a signal. */
   readonly warmup: number;
   /** Entry decision on the last candle of `candles`. */
@@ -22,4 +24,9 @@ export interface Strategy {
    * return a price at least as protective as `position.stop`.
    */
   updateStop(position: OpenPositionView, candles: Candle[]): number;
+  /**
+   * Optional discretionary exit (target, time stop) decided on the last CLOSED candle.
+   * The backtest fills it at the next candle's open; the live engine closes at market.
+   */
+  shouldExit?(position: OpenPositionView, candles: Candle[]): boolean;
 }

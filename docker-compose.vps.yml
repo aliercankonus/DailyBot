@@ -58,7 +58,7 @@ services:
       BINANCE_BASE_URL: ${BINANCE_BASE_URL:-}
       BINANCE_STOP_API: ${BINANCE_STOP_API:-auto}
       SYMBOLS: ${SYMBOLS:-BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT}
-      INTERVAL: ${INTERVAL:-4h}
+      STRATEGY: ${STRATEGY:-trend}
       RISK_PER_TRADE: ${RISK_PER_TRADE:-0.005}
       MAX_LEVERAGE: ${MAX_LEVERAGE:-3}
       MAX_OPEN_POSITIONS: ${MAX_OPEN_POSITIONS:-3}
@@ -105,20 +105,28 @@ services:
       retries: 3
 
   # Opt-in research job: set RESEARCH=1 in the project environment, then update the project.
-  # It downloads 4h candles from 2021, prints the backtest report to its logs and exits with the
-  # real status code. With RESEARCH unset it logs "research skipped" and exits 0.
+  # It downloads 4h and 1h candles from 2021, prints a backtest report per strategy to its logs
+  # and exits 0 if at least one strategy passed the acceptance gate, 2 otherwise. With RESEARCH unset it logs "research skipped" and exits 0.
   research:
     <<: *node
     environment:
       RESEARCH: ${RESEARCH:-0}
+      RESEARCH_STRATEGIES: ${RESEARCH_STRATEGIES:-trend pullback meanrev}
     command:
       - sh
       - -c
       - >-
         if [ "$${RESEARCH}" != "1" ]; then echo "research skipped (set RESEARCH=1 to run)"; exit 0; fi;
         node dist/cli/download.js --interval 4h --from 2021-01-01 --dir /data &&
-        node dist/cli/backtest.js --interval 4h --split 2025-01-01 --dir /data --robustness;
-        status=$$?; echo "research finished with exit code $$status"; exit $$status
+        node dist/cli/download.js --interval 1h --from 2021-01-01 --dir /data || exit 1;
+        best=2;
+        for s in $${RESEARCH_STRATEGIES}; do
+          echo "==================== strategy $$s ====================";
+          node dist/cli/backtest.js --strategy $$s --split 2025-01-01 --dir /data --robustness;
+          rc=$$?; echo "strategy $$s finished with exit code $$rc";
+          if [ $$rc -eq 0 ]; then best=0; fi;
+        done;
+        echo "research finished with exit code $$best (0 = at least one strategy passed)"; exit $$best
     volumes:
       - research:/data
     mem_limit: 768m

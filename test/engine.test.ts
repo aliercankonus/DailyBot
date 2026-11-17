@@ -330,3 +330,22 @@ describe("engine hardening (review fixes)", () => {
     expect(lossAtStop).toBeLessThanOrEqual(100 + 1e-6);
   });
 });
+
+describe("engine strategy exits", () => {
+  it("closes at market on shouldExit and records the fill candle as entry candle", async () => {
+    const base = createTrendBreakout();
+    let exitNow = false;
+    const strat = { ...base, shouldExit: () => exitNow };
+    engine = new Engine({ exchange: ex, repo, strategy: strat, notifier: { send: async () => {} }, cfg, now: () => ex.now });
+    at(signalIdx);
+    await engine.tick();
+    const pos = (await repo.getOpenPosition("BTCUSDT"))!;
+    expect(pos.entryCandleOpenTime).toBe(allCandles[signalIdx]!.openTime + H4);
+    exitNow = true;
+    at(signalIdx + 1);
+    await engine.tick();
+    expect(ex.positions.BTCUSDT).toBeUndefined();
+    expect(repo.positions[0]!.exitReason).toBe("STRATEGY_EXIT");
+    expect(ex.stops).toHaveLength(0);
+  });
+});

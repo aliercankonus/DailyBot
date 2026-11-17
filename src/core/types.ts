@@ -30,7 +30,9 @@ export interface OpenPositionView {
   side: Side;
   entryPrice: number;
   stop: number;
-  /** openTime of the candle on which the position was entered. */
+  /** Stop at entry; entryPrice - initialStop is the position's 1R. */
+  initialStop: number;
+  /** openTime of the candle during which the position was entered (the candle after the signal). */
   entryCandleOpenTime: number;
 }
 

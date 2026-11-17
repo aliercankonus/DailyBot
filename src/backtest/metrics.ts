@@ -75,8 +75,8 @@ export const INTEGER_PARAM_KEYS: ReadonlySet<string> = new Set(["entryLookback",
  * Robustness sweep value for one parameter: integer periods are rounded (min 1);
  * multipliers such as stopAtr/trailAtr are scaled unrounded, even if their base is a whole number.
  */
-export function perturbParam(key: string, base: number, factor: number): number {
-  return INTEGER_PARAM_KEYS.has(key) ? Math.max(1, Math.round(base * factor)) : base * factor;
+export function perturbParam(key: string, base: number, factor: number, integerKeys: ReadonlySet<string> = INTEGER_PARAM_KEYS): number {
+  return integerKeys.has(key) ? Math.max(1, Math.round(base * factor)) : base * factor;
 }
 
 export function formatMetrics(m: Metrics): string {

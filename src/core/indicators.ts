@@ -83,3 +83,97 @@ export function rsi(values: number[], period = 14): number[] {
   }
   return out;
 }
+
+/** Simple moving average. */
+export function sma(values: number[], period: number): number[] {
+  const out = new Array<number>(values.length).fill(NaN);
+  let sum = 0;
+  for (let i = 0; i < values.length; i++) {
+    sum += values[i]!;
+    if (i >= period) sum -= values[i - period]!;
+    if (i >= period - 1) out[i] = sum / period;
+  }
+  return out;
+}
+
+/** Bollinger bands (population standard deviation, as most charting tools use). */
+export function bollinger(values: number[], period: number, mult: number): { mid: number[]; upper: number[]; lower: number[] } {
+  const mid = sma(values, period);
+  const upper = new Array<number>(values.length).fill(NaN);
+  const lower = new Array<number>(values.length).fill(NaN);
+  for (let i = period - 1; i < values.length; i++) {
+    let v = 0;
+    for (let j = i - period + 1; j <= i; j++) v += (values[j]! - mid[i]!) ** 2;
+    const sd = Math.sqrt(v / period);
+    upper[i] = mid[i]! + mult * sd;
+    lower[i] = mid[i]! - mult * sd;
+  }
+  return { mid, upper, lower };
+}
+
+/** Wilder ADX. First value at index 2*period - 1. */
+export function adx(candles: Candle[], period = 14): number[] {
+  const n = candles.length;
+  const out = new Array<number>(n).fill(NaN);
+  if (n < 2 * period) return out;
+  const tr = trueRange(candles);
+  let trS = 0, pS = 0, mS = 0;
+  const dx = new Array<number>(n).fill(NaN);
+  for (let i = 1; i < n; i++) {
+    const up = candles[i]!.high - candles[i - 1]!.high;
+    const down = candles[i - 1]!.low - candles[i]!.low;
+    const pdm = up > down && up > 0 ? up : 0;
+    const mdm = down > up && down > 0 ? down : 0;
+    if (i <= period) {
+      trS += tr[i]!; pS += pdm; mS += mdm;
+      if (i < period) continue;
+    } else {
+      trS = trS - trS / period + tr[i]!;
+      pS = pS - pS / period + pdm;
+      mS = mS - mS / period + mdm;
+    }
+    const pdi = trS > 0 ? (100 * pS) / trS : 0;
+    const mdi = trS > 0 ? (100 * mS) / trS : 0;
+    dx[i] = pdi + mdi > 0 ? (100 * Math.abs(pdi - mdi)) / (pdi + mdi) : 0;
+  }
+  // ADX: average of the first `period` DX values, then Wilder smoothing.
+  let sum = 0;
+  for (let i = period; i < 2 * period; i++) sum += dx[i]!;
+  let prev = sum / period;
+  out[2 * period - 1] = prev;
+  for (let i = 2 * period; i < n; i++) {
+    prev = (prev * (period - 1) + dx[i]!) / period;
+    out[i] = prev;
+  }
+  return out;
+}
+
+/**
+ * Aggregate closed candles into a higher timeframe aligned to UTC multiples of `targetMs`.
+ * Only COMPLETE buckets are returned (every sub-candle present), so a bucket that is still
+ * forming never leaks into a decision.
+ */
+export function aggregate(candles: Candle[], sourceMs: number, targetMs: number): Candle[] {
+  const per = Math.round(targetMs / sourceMs);
+  const out: Candle[] = [];
+  let i = 0;
+  while (i < candles.length) {
+    const start = Math.floor(candles[i]!.openTime / targetMs) * targetMs;
+    let j = i;
+    while (j < candles.length && candles[j]!.openTime < start + targetMs) j++;
+    const group = candles.slice(i, j);
+    if (group.length === per && group[0]!.openTime === start) {
+      out.push({
+        openTime: start,
+        closeTime: group.at(-1)!.closeTime,
+        open: group[0]!.open,
+        high: Math.max(...group.map((c) => c.high)),
+        low: Math.min(...group.map((c) => c.low)),
+        close: group.at(-1)!.close,
+        volume: group.reduce((a, c) => a + c.volume, 0),
+      });
+    }
+    i = j;
+  }
+  return out;
+}

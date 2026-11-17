@@ -30,6 +30,7 @@ export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAK
 
   return {
     name: `trend-breakout(${p.entryLookback},${p.emaFast}/${p.emaSlow},atr${p.atrPeriod}x${p.stopAtr}/${p.trailAtr})`,
+    interval: "4h",
     warmup,
 
     evaluate(symbol: string, candles: Candle[]): Signal | null {

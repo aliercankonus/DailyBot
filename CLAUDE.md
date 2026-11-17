@@ -13,8 +13,8 @@
 - Test (all): `npm test` (Postgres tests also run when `TEST_DATABASE_URL` is set)
 - Test (single file): `npx vitest run test/engine.test.ts`
 - Lint / typecheck: `npm run typecheck`
-- Download data: `npm run download -- --interval 4h --from 2021-01-01`
-- Backtest: `npm run backtest -- --interval 4h --split 2025-01-01 --robustness`
+- Download data: `npm run download -- --interval 4h --from 2021-01-01` (and `--interval 1h` for B/C)
+- Backtest: `npm run backtest -- --strategy trend|pullback|meanrev --split 2025-01-01 --robustness` (strategies in `src/strategy/registry.ts`; each declares its interval)
 - Run locally: `npm run migrate && npm run engine` (MODE=paper by default), `npm run api`
 
 ## Code conventions

@@ -4,7 +4,8 @@ import { writeFile } from "node:fs/promises";
 import { loadConfig } from "../config.js";
 import { PgRepo } from "../db/pgRepo.js";
 import { Engine } from "../engine/engine.js";
-import { createTrendBreakout } from "../strategy/trendBreakout.js";
+import { INTERVAL_MS } from "../config.js";
+import { getStrategy } from "../strategy/registry.js";
 import { makeExchange, makeNotifier, makePool } from "./runtime.js";
 
 const ENGINE_LOCK_ID = 727_001;
@@ -112,16 +113,21 @@ try {
   const repo = new PgRepo(pool);
   const ex = await makeExchange(cfg, repo);
   persist = ex.persist;
+  // The strategy decides its own candle interval, so live always matches what was backtested.
+  const strategy = getStrategy(cfg.STRATEGY).create();
+  const intervalMs = INTERVAL_MS[strategy.interval];
+  if (!intervalMs) throw new Error(`strategy interval ${strategy.interval} is not supported`);
+  if (strategy.interval !== cfg.INTERVAL) log("info", `INTERVAL=${cfg.INTERVAL} ignored; strategy ${cfg.STRATEGY} uses ${strategy.interval}`);
   const engine = new Engine({
-    exchange: ex.exchange, repo, notifier, strategy: createTrendBreakout(),
+    exchange: ex.exchange, repo, notifier, strategy,
     cfg: {
-      symbols: cfg.symbols, interval: cfg.INTERVAL, intervalMs: cfg.intervalMs, riskPerTrade: cfg.RISK_PER_TRADE,
+      symbols: cfg.symbols, interval: strategy.interval, intervalMs, riskPerTrade: cfg.RISK_PER_TRADE,
       maxLeverage: cfg.MAX_LEVERAGE, maxOpenPositions: cfg.MAX_OPEN_POSITIONS, dailyLossLimit: cfg.DAILY_LOSS_LIMIT,
       maxDrawdown: cfg.MAX_DRAWDOWN, maxCandleDelayMs: 15 * 60_000,
       roundTripCostPct: 2 * (cfg.TAKER_FEE + cfg.SLIPPAGE),
     },
   });
-  await notifier.send("info", `Engine started: mode=${cfg.MODE} symbols=${cfg.symbols.join(",")} interval=${cfg.INTERVAL} risk=${cfg.RISK_PER_TRADE * 100}%`);
+  await notifier.send("info", `Engine started: mode=${cfg.MODE} strategy=${strategy.name} symbols=${cfg.symbols.join(",")} interval=${strategy.interval} risk=${cfg.RISK_PER_TRADE * 100}%`);
   await tick(engine);
   if (!stopping) interval = setInterval(() => void tick(engine), cfg.TICK_SECONDS * 1000);
 } catch (e) {
