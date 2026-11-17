@@ -28,11 +28,26 @@ Binance USDⓈ-M futures bot (long + short) with a proven out-of-sample edge, ru
   - deploy/API: per-service secrets, container hardening, CI permissions + build on PRs, heartbeat healthcheck, lock liveness check, bounded shutdown, camelCase API, 401 rate limit, engine-set kill switch needs force + reason.
   - Tests: 140 passing (Postgres included).
 
+## Deployment
+- 2026-11-17: Hostinger VPS (KVM 2, Düsseldorf) Docker project `dailybot`, MODE=paper. db/api/engine healthy, migrate exit 0, engine ticking every 60s (~1.5s per tick). API on 127.0.0.1:8081. Secrets live in the project environment in hPanel.
+
 ## Next
-2. On the VPS: download 4h data from 2021, run `npm run backtest -- --split 2025-01-01 --robustness`, record results here. Decide go / no-go (Phase 1 gate).
+2. Phase 1 continues: candidate A failed the gate; research candidates B (1h pullback with 4h trend filter) and C (mean reversion), same acceptance criteria.
 3. Testnet run: confirm `BINANCE_STOP_API`, full order lifecycle.
 4. Dashboard (React) reading the API.
 5. Not yet done: Docker image build was not tested in the build environment (no Docker daemon); first `docker compose up --build` on the VPS is the check.
 
 ## Backtest results
-_None yet. Real data could not be downloaded from the build environment._
+
+### 2026-11-17 — trend-breakout(20, 50/200, atr14 x2/3), 4h, BTC/ETH/SOL/BNB/XRP, data 2021-01 → 2026-11
+Run on the VPS by the `research` service (image d7f6871). Costs: taker 0.05%/side, slippage 0.05%/fill, funding 0.01%/8h, risk 1%/trade.
+
+| | trades | win rate | PF | expectancy | net return | max DD |
+|---|---|---|---|---|---|---|
+| In-sample (< 2025) | 636 | 35.5% | 1.25 | 0.14R | +94.8% | 22.7% |
+| Out-of-sample (≥ 2025) | 320 | 30.6% | 1.09 | 0.11R | +18.7% | 35.3% |
+
+OOS per symbol: ETH +0.31R, SOL +0.24R, BTC +0.01R, BNB 0.00R, XRP −0.08R. 2026 YTD is negative (−1690 USDT).
+Robustness (±20% per parameter): PF 0.98–1.15, no parameter value reaches the gate; trailAtr 2.4 drops to PF 0.98.
+
+**Phase 1 gate: FAIL** (PF 1.09 < 1.3, expectancy 0.11R < 0.3R, DD 35% > 20%). The edge is small and not robust enough for real money. Do not go live with this strategy. The paper engine keeps running to validate the infrastructure, not the strategy.
