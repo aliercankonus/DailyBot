@@ -12,6 +12,8 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
+# Named volumes copy this ownership on first mount, so the node user can write downloaded data.
+RUN mkdir -p /data && chown node:node /data
 USER node
 # Overridden per service in docker-compose.yml
 CMD ["node", "dist/cli/engine.js"]

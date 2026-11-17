@@ -1,0 +1,99 @@
+# Deployable as-is through the Hostinger Docker manager (no build context, no bind mounts).
+# The image is built and pushed to GHCR by .github/workflows/ci.yml on every push to main.
+# Required project environment: POSTGRES_PASSWORD, API_TOKEN. Everything else has safe defaults
+# (MODE=paper: live public market data, simulated account, no API keys).
+#
+# Port 8080 on this VPS belongs to signal-desk; this project's API uses 127.0.0.1:8081.
+
+x-app: &app
+  image: ghcr.io/aliercankonus/dailybot:main
+  environment: &appenv
+    MODE: ${MODE:-paper}
+    CONFIRM_LIVE: ${CONFIRM_LIVE:-}
+    BINANCE_API_KEY: ${BINANCE_API_KEY:-}
+    BINANCE_API_SECRET: ${BINANCE_API_SECRET:-}
+    BINANCE_BASE_URL: ${BINANCE_BASE_URL:-}
+    BINANCE_STOP_API: ${BINANCE_STOP_API:-algo}
+    SYMBOLS: ${SYMBOLS:-BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT}
+    INTERVAL: ${INTERVAL:-4h}
+    RISK_PER_TRADE: ${RISK_PER_TRADE:-0.005}
+    MAX_LEVERAGE: ${MAX_LEVERAGE:-3}
+    MAX_OPEN_POSITIONS: ${MAX_OPEN_POSITIONS:-3}
+    DAILY_LOSS_LIMIT: ${DAILY_LOSS_LIMIT:-0.03}
+    MAX_DRAWDOWN: ${MAX_DRAWDOWN:-0.15}
+    PAPER_START_BALANCE: ${PAPER_START_BALANCE:-10000}
+    TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+    TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+    API_TOKEN: ${API_TOKEN:?set API_TOKEN}
+    DATABASE_URL: postgres://trader:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/trader
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: trader
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: trader
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    mem_limit: 512m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trader"]
+      interval: 5s
+      retries: 20
+
+  migrate:
+    <<: *app
+    command: ["node", "dist/cli/migrate.js"]
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+
+  engine:
+    <<: *app
+    command: ["node", "dist/cli/engine.js"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    mem_limit: 384m
+    restart: unless-stopped
+    stop_grace_period: 60s
+
+  api:
+    <<: *app
+    command: ["node", "dist/cli/api.js"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    ports:
+      - "127.0.0.1:8081:8080"
+    mem_limit: 256m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # One-shot research job: downloads 4h candles from 2021 and prints the backtest report to
+  # its logs, then exits. Re-runs on every project update. Read it with the project logs.
+  research:
+    <<: *app
+    command:
+      - sh
+      - -c
+      - >-
+        node dist/cli/download.js --interval 4h --from 2021-01-01 --dir /data &&
+        node dist/cli/backtest.js --interval 4h --split 2025-01-01 --dir /data --robustness;
+        echo "research finished with exit code $$?"
+    volumes:
+      - research:/data
+    mem_limit: 1g
+    cpus: 1.0
+    restart: "no"
+
+volumes:
+  pgdata:
+  research:

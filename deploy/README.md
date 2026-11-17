@@ -1,5 +1,19 @@
 # Hostinger VPS kurulumu
 
+## Yol A: Hostinger Docker yöneticisi (önerilen, kullanılan yol)
+
+Kaynak kod VPS'e kopyalanmaz. GitHub Actions her `main` push'unda testleri çalıştırır ve
+`ghcr.io/aliercankonus/dailybot:main` imajını basar. VPS bu imajı `docker-compose.vps.yml` ile çalıştırır.
+
+1. hPanel → VPS → Docker Manager → yeni proje `dailybot`, içerik olarak `docker-compose.vps.yml`.
+2. Proje ortam değişkenleri: `POSTGRES_PASSWORD` ve `API_TOKEN` (ikisi de uzun rastgele değer) zorunlu; geri kalanlar varsayılan olarak güvenli (`MODE=paper`).
+3. `research` servisi kurulumda 4h veriyi indirip backtest raporunu loglarına yazar ve kapanır.
+4. Güncelleme: yeni imaj basıldıktan sonra projeyi "Update" ile yenile.
+
+API `127.0.0.1:8081`'de dinler (8080 signal-desk'e ait).
+
+## Yol B: Elle kurulum
+
 Ubuntu 22.04/24.04 bir Hostinger VPS varsayılır. Komutlar VPS'te çalıştırılır.
 
 ## 1. Sunucuyu hazırla (bir kez)
@@ -56,15 +70,15 @@ docker compose run --rm -v "$PWD/data:/app/data" engine node dist/cli/backtest.j
 
 ## 5. Dashboard / API erişimi
 
-API yalnızca `127.0.0.1:8080`'de dinler. Dışarıdan erişim için:
-- en güvenlisi SSH tüneli: `ssh -L 8080:localhost:8080 trader@VPS_IP`, sonra `curl -H "Authorization: Bearer $API_TOKEN" localhost:8080/status`;
+API yalnızca `127.0.0.1:8081`'de dinler. Dışarıdan erişim için:
+- en güvenlisi SSH tüneli: `ssh -L 8081:localhost:8081 trader@VPS_IP`, sonra `curl -H "Authorization: Bearer $API_TOKEN" localhost:8081/status`;
 - ya da Caddy/Nginx ile alan adı + TLS (port 443) üzerinden.
 
 Acil durdurma:
 
 ```bash
 curl -X POST -H "Authorization: Bearer $API_TOKEN" -H "content-type: application/json" \
-  -d '{"on":true,"reason":"manuel"}' localhost:8080/kill-switch
+  -d '{"on":true,"reason":"manuel"}' localhost:8081/kill-switch
 ```
 
 Kill switch yeni girişleri durdurur; açık pozisyonların stopları borsada kalır ve yönetilmeye devam eder.
