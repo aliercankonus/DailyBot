@@ -222,6 +222,30 @@ Causes and what follows from them:
 
 How to reduce losses (in order of evidence): (a) lower risk per trade (DD scales with risk: 0.5% ≈ half the drawdown, the 23-loss streak ≈ −11%); (b) the loser time stop; (c) volatility filter (round 8); (d) combine with an uncorrelated return stream (G-LS) instead of adding more filters to A.
 
+### 2026-11-18 — Round 8: volatility filter, and portfolios (image 13e0043)
+
+Single strategies (4h, 5 coins, 1% risk):
+
+| | IS PF | OOS trades | OOS PF | OOS E | OOS DD | 2025 PF | 2026 PF | Full CAGR | Full Sharpe | Full DD | OOS PF range ±20% |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A | 1.25 | 321 | 1.13 | 0.12R | 34.8% | 1.33 | 0.95 | 16.3% | 0.70 | 34.6% | 1.00-1.18 |
+| A-LV (ATR < 3%) | 1.24 | 306 | 1.20 | 0.17R | 34.4% | 1.52 | 0.97 | 16.4% | 0.73 | 34.3% | 1.06-1.27 |
+| A-LV + time stop | 1.22 | 321 | 1.20 | 0.16R | 32.9% | 1.46 | 1.00 | 15.8% | 0.72 | 31.8% | 1.06-1.27 |
+
+Portfolios (50/50 of capital, daily rebalanced; each leg with its own default risk; A legs start 2021, so 2020 is half G-LS and half cash):
+
+| | Corr. | 2020 | 2021 | 2022 | 2023 | 2024 | 2025 | 2026 | CAGR | Vol | Sharpe | Max DD | From 2025: Sharpe / DD |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| A + G-LS | 0.40 | +32.2% | +17.7% | +14.7% | +28.5% | +33.6% | +5.2% | +14.1% | 20.8% | 22.2% | 0.96 | 22.1% | 0.51 / 22.1% |
+| **A-LV+timestop + G-LS** | 0.35 | +32.2% | +17.0% | +21.7% | +20.5% | +25.8% | +9.2% | +16.6% | 20.6% | 21.2% | **0.99** | **20.7%** | 0.66 / 20.7% |
+| A-LV+timestop + G | 0.29 | +45.0% | +51.2% | +0.3% | +70.9% | +34.5% | +25.1% | −4.9% | 29.8% | 22.4% | 1.28 | 31.2% | 0.47 / 31.2% |
+| (G-LS alone) | | +70.3% | +29.0% | +23.3% | +10.7% | +44.4% | −17.8% | +33.4% | 25.4% | 29.3% | 0.92 | 32.6% | 0.31 / 26.8% |
+
+Findings:
+- The volatility filter is the first change to A that improves the out-of-sample result (PF 1.13 → 1.20) while staying robust (every ±20% neighbour ≥ 1.06, maxAtrPct 2.4% / 3.6% both fine) and leaving in-sample unchanged. Adopted.
+- A-LV + time stop + G-LS (50/50) is the best result of the project: positive in every calendar year 2020-2026, max drawdown 20.7%, Sharpe 0.99. The two legs lose in different years (A in 2026, G-LS in 2025), correlation 0.35. It still misses the strict out-of-sample gate (Sharpe 0.66 < 1.0 from 2025), and the volatility filter and time stop were chosen after seeing 2025-26 data, so the true forward result will be worse than this backtest.
+- About 35 variants have now been tested on the same 2020-2026 data. Decision: freeze the parameters here and treat paper trading from now on as the only valid test.
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
