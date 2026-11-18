@@ -104,4 +104,8 @@ export const EXIT_PRESETS: Record<string, ExitOverlay> = {
   // The old bot's ladder exactly: full TP = 2R (SL 1.5 ATR, TP 3 ATR); TP1 at 33% of the distance
   // closes 50%, TP2 at 66% closes 60% of the rest (30%), TP3 at 100% closes the last 20%.
   tpold: { takeProfit: { levels: [{ r: 0.66, fraction: 0.5 }, { r: 1.32, fraction: 0.3 }, { r: 2, fraction: 0.2 }], breakEvenAfterFirst: true } },
+  // Sensitivity checks without break-even after TP1: removes the pessimistic "TP1 and break-even
+  // in the same candle = stopped" assumption, so this is the most favourable case for a ladder.
+  tpoldnb: { takeProfit: { levels: [{ r: 0.66, fraction: 0.5 }, { r: 1.32, fraction: 0.3 }, { r: 2, fraction: 0.2 }], breakEvenAfterFirst: false } },
+  tp1nb: { takeProfit: { levels: [{ r: 1, fraction: 0.5 }], breakEvenAfterFirst: false } },
 };

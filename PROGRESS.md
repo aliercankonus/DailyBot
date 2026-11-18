@@ -162,6 +162,23 @@ Findings:
 - Risk modifiers halve drawdown but cut return by more (Sharpe 0.74 → 0.47): trend losses cluster just before the big winners, so de-risking after losses misses them. Lower fixed risk gives the same drawdown at a better Sharpe.
 - Conclusion: the old bot's problems were execution and complexity, not missing filters; none of its ideas adds an edge. Best candidates remain G / G-LS (forward test).
 
+### 2026-11-18 — Round 4: partial take-profits (TP1/TP2) on A (image a74c71e)
+
+Break-even after TP1 in all; a candle touching stop and TP is a stop-out; TP fills at level minus slippage.
+
+| | Levels (R: fraction of original size) | IS trades | IS win | IS PF | OOS win | OOS PF | OOS E | OOS DD | Full CAGR | Full Sharpe |
+|---|---|---|---|---|---|---|---|---|---|---|
+| A baseline | none (trailing only) | — | — | 1.25 | — | 1.12 | — | 34.8% | — | ~0.74 |
+| A+tpold (old bot exact) | 0.66:50%, 1.32:30%, 2:20% | 1185 | 64.4% | 0.82 | 58.5% | 0.65 | −0.15R | 61.0% | −23.6% | −1.66 |
+| A+tp1 | 1:50% | 744 | 50.0% | 1.03 | 44.9% | 0.83 | −0.07R | 36.8% | −3.7% | −0.12 |
+| A+tp12 | 1:33%, 2:33% | 744 | 50.0% | 0.97 | 44.9% | 0.75 | −0.12R | 42.8% | −9.2% | −0.47 |
+| A+tp23 | 1.5:40%, 3:30% | 673 | 39.7% | 1.10 | 33.3% | 0.89 | −0.05R | 42.4% | +1.2% | 0.16 |
+
+Findings:
+- Every ladder makes A worse, and the earlier the TP the worse: the old bot's ladder turns a profitable system into −24%/year with a 64% win rate (avg win 0.45R vs avg loss 0.97R). This is the "high win rate" trap: winners are capped at 2R while losers stay 1R, and a trend system lives on a few large winners.
+- Trade count nearly doubles with tpold (1185 vs 649 for A+be): break-even stops after TP1 end trades early and the strategy re-enters, paying fees again.
+- Caveat: break-even in the TP1 candle is assumed stopped (pessimistic). Sensitivity presets without break-even (`tpoldnb`, `tp1nb`) are queued to check the conclusion does not depend on it.
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
