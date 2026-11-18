@@ -108,6 +108,14 @@ describe("exit overlays (R units)", () => {
     expect(overlayStop(EXIT_PRESETS.lock!, pos, c([100, 121, 115]))).toBeCloseTo(107.5);
   });
 
+  it("stepped stop: entry at 50% of a 2R target, +1R at the target, then 1R behind the peak", () => {
+    expect(overlayStop(EXIT_PRESETS.step!, pos, c([100, 109]))).toBe(90);            // 0.9R: unchanged
+    expect(overlayStop(EXIT_PRESETS.step!, pos, c([100, 110.5]))).toBeCloseTo(100.2); // 1R: break-even
+    expect(overlayStop(EXIT_PRESETS.step!, pos, c([100, 121, 115]))).toBeCloseTo(110); // peak 2R: +1R
+    expect(overlayStop(EXIT_PRESETS.step!, pos, c([100, 141, 130]))).toBeCloseTo(130); // peak 4R: +3R
+    expect(overlayStop(EXIT_PRESETS.steptight!, pos, c([100, 121]))).toBeCloseTo(112.5);
+  });
+
   it("R trailing follows the close once 1.2R in profit", () => {
     expect(overlayStop(EXIT_PRESETS.trail!, pos, c([100, 113]))).toBeCloseTo(113 - 7.5);
     expect(overlayStop(EXIT_PRESETS.trail!, pos, c([100, 111]))).toBe(90);

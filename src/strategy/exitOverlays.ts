@@ -15,7 +15,8 @@ import type { Strategy, TakeProfitPlan } from "./types.js";
 export interface ExitOverlay {
   breakEvenAt?: number;      // R
   breakEvenBuffer?: number;  // fraction of price, e.g. 0.002
-  lockTiers?: boolean;
+  /** true = the old bot's table (LOCK_TIERS); or a custom table of [peak R, locked R]. */
+  lockTiers?: boolean | readonly (readonly [number, number])[];
   trailAt?: number;          // R
   trailDist?: number;        // R
   loserBars?: number;
@@ -58,7 +59,8 @@ export function overlayStop(o: ExitOverlay, p: OpenPositionView, candles: Candle
     stop = tighter(stop, p.entryPrice * (1 + dir * (o.breakEvenBuffer ?? 0.002)));
   }
   if (o.lockTiers) {
-    const tier = LOCK_TIERS.find(([at]) => peak >= at);
+    const table = o.lockTiers === true ? LOCK_TIERS : [...o.lockTiers].sort((a, b) => b[0] - a[0]);
+    const tier = table.find(([at]) => peak >= at);
     if (tier) stop = tighter(stop, p.entryPrice + dir * tier[1] * r);
   }
   if (o.trailAt !== undefined && o.trailDist !== undefined && closeR(p, candles) >= o.trailAt) {
@@ -100,6 +102,11 @@ export const EXIT_PRESETS: Record<string, ExitOverlay> = {
   tp1: { takeProfit: { levels: [{ r: 1, fraction: 0.5 }], breakEvenAfterFirst: true } },
   tp12: { takeProfit: { levels: [{ r: 1, fraction: 1 / 3 }, { r: 2, fraction: 1 / 3 }], breakEvenAfterFirst: true } },
   tp23: { takeProfit: { levels: [{ r: 1.5, fraction: 0.4 }, { r: 3, fraction: 0.3 }], breakEvenAfterFirst: true } },
+  // Stepped stop toward a 2R target (the old bot's full TP): at 50% of the target (1R) the stop
+  // goes to entry, at 75% to +0.5R, at 100% to +1R, then it stays 1R behind the peak.
+  step: { breakEvenAt: 1, breakEvenBuffer: 0.002, lockTiers: [[1.5, 0.5], [2, 1], [2.5, 1.5], [3, 2], [4, 3], [5, 4], [6, 5], [8, 7]] },
+  // Same, 0.75R behind the peak.
+  steptight: { breakEvenAt: 1, breakEvenBuffer: 0.002, lockTiers: [[1.5, 0.75], [2, 1.25], [2.5, 1.75], [3, 2.25], [4, 3.25], [5, 4.25], [6, 5.25], [8, 7.25]] },
   tp2: { takeProfit: { levels: [{ r: 2, fraction: 0.5 }], breakEvenAfterFirst: true } },
   // The old bot's ladder exactly: full TP = 2R (SL 1.5 ATR, TP 3 ATR); TP1 at 33% of the distance
   // closes 50%, TP2 at 66% closes 60% of the rest (30%), TP3 at 100% closes the last 20%.
