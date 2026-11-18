@@ -54,6 +54,11 @@ export function getCatalogEntry(name: string): CatalogEntry {
     return weightsEntry("G", { ...DEFAULT_DONCHIAN_ENSEMBLE }, ["volLookback"], ["allowShort"],
       (p) => createDonchianEnsemble({ ...DEFAULT_DONCHIAN_ENSEMBLE, ...p }));
   }
+  if (name === "donchianls") {
+    // Pre-registered variant: the same rules mirrored for shorts (the paper is long only).
+    return weightsEntry("G-LS", { ...DEFAULT_DONCHIAN_ENSEMBLE, allowShort: 1 }, ["volLookback"], ["allowShort"],
+      (p) => createDonchianEnsemble({ ...DEFAULT_DONCHIAN_ENSEMBLE, ...p, allowShort: 1 }));
+  }
   if (name === "carry") {
     return weightsEntry("H", { ...DEFAULT_FUNDING_CARRY }, ["lookbackDays", "rebalanceEvery"], [],
       (p) => createFundingCarry({ ...DEFAULT_FUNDING_CARRY, ...p }), true);
@@ -95,4 +100,4 @@ export function getCatalogEntry(name: string): CatalogEntry {
   };
 }
 
-export const CATALOG_NAMES = [...STRATEGY_NAMES, "xsmom", "donchian", "carry", "btchold", "ewhold"];
+export const CATALOG_NAMES = [...STRATEGY_NAMES, "xsmom", "donchian", "donchianls", "carry", "btchold", "ewhold"];

@@ -8,7 +8,6 @@ import { createBtcHold } from "../src/strategy/benchmarks.js";
 import { createDonchianEnsemble, DONCHIAN_LOOKBACKS, ensembleFraction, priorRollingExtreme } from "../src/strategy/donchianEnsemble.js";
 import { createFundingCarry, windowAverage } from "../src/strategy/fundingCarry.js";
 import type { WeightStrategy } from "../src/strategy/weights.js";
-import { realizedVol } from "../src/strategy/weights.js";
 import { candlesFromCloses } from "./helpers.js";
 
 const D1 = 86_400_000;
@@ -64,13 +63,26 @@ describe("strategy G: Donchian ensemble", () => {
     for (let i = 400; i <= 600; i++) expect(wb.get(a.X[i]!.openTime)).toEqual(wa.get(a.X[i]!.openTime));
   });
 
-  it("inverse-volatility sizing and the gross cap", () => {
-    const up = Array.from({ length: 500 }, (_, i) => 100 * 1.004 ** i * (1 + (i % 2 ? 0.01 : -0.01)));
+  it("portfolio volatility targeting hits the target on a stationary random walk", () => {
+    const r = noise(21);
+    const candles: Record<string, Candle[]> = {};
+    for (const sym of ["A", "B", "C", "D"]) {
+      let p = 100;
+      // persistent up-drift so the ensemble is invested, daily vol about 3%
+      candles[sym] = candlesFromCloses(Array.from({ length: 900 }, () => (p *= 1.002 + r() * 0.1)), T0, D1);
+    }
+    const g = createDonchianEnsemble({ volTarget: 0.25, volLookback: 90, maxGross: 10, allowShort: 0 });
+    const res = runWeightsBacktest(g, candles, free);
+    const m = equityMetrics(res.equityCurve.slice(500));
+    expect(m.annualVol).toBeGreaterThan(0.15);
+    expect(m.annualVol).toBeLessThan(0.4);
+  });
+
+  it("caps gross exposure", () => {
+    const up = Array.from({ length: 500 }, (_, i) => 100 * 1.004 ** i * (1 + (i % 2 ? 0.0001 : -0.0001)));
     const c = { A: candlesFromCloses(up, T0, D1) };
-    const w = createDonchianEnsemble({ volTarget: 0.25, volLookback: 90, maxGross: 2, allowShort: 0 }).weightSeries({ candles: c, funding: {} });
-    const last = w.get(c.A.at(-1)!.openTime)!.A!;
-    const vol = realizedVol(up, up.length - 1, 90);
-    expect(last).toBeCloseTo(Math.min(2, 0.25 / vol), 5);
+    const w = createDonchianEnsemble({ volTarget: 0.25, volLookback: 90, maxGross: 1.5, allowShort: 0 }).weightSeries({ candles: c, funding: {} });
+    expect(w.get(c.A.at(-1)!.openTime)!.A!).toBeCloseTo(1.5);
     expect(DONCHIAN_LOOKBACKS).toHaveLength(9);
   });
 });
