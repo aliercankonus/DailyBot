@@ -2,6 +2,7 @@
 //   [--symbols ...] [--risk 0.01] [--max-open 3] [--from ...] [--to ...] [--robustness]
 //   [--dd-scale] [--loss-streak]   (risk modifiers, single-symbol strategies only)
 //   [--max-same-dir 2] [--cooldown 3]   (portfolio rules: same-side cap, re-entry bars after a stop)
+//   [--analyze]   (loss attribution over all data: exit, side, hold time, MFE, regime, worst months)
 // Defaults for symbols, risk and max-open come from the strategy (src/backtest/catalog.ts).
 //
 // Prints in-sample (before --split) and out-of-sample (from --split) results separately.
@@ -11,6 +12,7 @@ import type { Candle } from "../core/types.js";
 import { DEFAULT_BACKTEST, type BacktestConfig } from "../backtest/engine.js";
 import { getCatalogEntry } from "../backtest/catalog.js";
 import { acceptance, computeMetrics, equityAcceptance, equityMetrics, formatEquity, formatMetrics, formatProfitFactor, groupBy, perturbParam, yearlyConsistency } from "../backtest/metrics.js";
+import { lossReport } from "../backtest/analysis.js";
 import { csvPath, loadCsv } from "../data/klines.js";
 import { attachFunding, fundingCsvPath, loadFundingCsv } from "../data/funding.js";
 import type { FundingPoint } from "../exchange/types.js";
@@ -108,6 +110,13 @@ for (const [y, ts] of groupBy(full.res.trades, (t) => new Date(t.entryTime).getU
 }
 
 console.log(`== FULL PERIOD (all data, equity view) ==\n${formatEquity(full.eq)}\n`);
+if (a.analyze && !isWeights) {
+  console.log("== LOSS ANALYSIS (all data) ==");
+  for (const line of lossReport(full.res.trades, all)) console.log(line);
+  console.log("== LOSS ANALYSIS (out-of-sample) ==");
+  for (const line of lossReport(oos.res.trades, all)) console.log(line);
+  console.log("");
+}
 
 const verdict = isWeights ? equityAcceptance(oos.eq) : acceptance(oos.m);
 if (!isWeights) console.log("out-of-sample by year:");

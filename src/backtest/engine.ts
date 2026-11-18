@@ -81,6 +81,10 @@ export interface BacktestTrade {
   netPnl: number;
   /** Net PnL in units of initial risk. */
   r: number;
+  /** Candles held and best/worst excursion in R from candle highs/lows (single-strategy backtest only). */
+  bars?: number;
+  mfeR?: number;
+  maeR?: number;
 }
 
 export interface BacktestResult {
@@ -111,6 +115,10 @@ interface OpenPos {
   /** Gross PnL and exit notional already realized by partial take-profits. */
   partialGross: number;
   partialExitValue: number;
+  /** Best and worst price seen since entry, and candles held. */
+  best: number;
+  worst: number;
+  bars: number;
 }
 
 const EIGHT_HOURS = 8 * 3600_000;
@@ -157,10 +165,15 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
       cooldown.set(p.symbol, { side: p.side, until: time + cfg.reentryCooldownBars * iv });
     }
     const avgExit = (p.partialExitValue + exitPrice * p.quantity) / p.originalQuantity;
+    const unit = Math.abs(p.entryPrice - p.initialStop);
+    const dirSign = p.side === "LONG" ? 1 : -1;
+    const mfeR = unit > 0 ? Math.max(0, dirSign * ((p.side === "LONG" ? p.best : p.worst) - p.entryPrice) / unit) : 0;
+    const maeR = unit > 0 ? Math.max(0, -dirSign * ((p.side === "LONG" ? p.worst : p.best) - p.entryPrice) / unit) : 0;
     trades.push({
       symbol: p.symbol, side: p.side, entryTime: p.entryTime, exitTime: time,
       entryPrice: p.entryPrice, exitPrice: avgExit, quantity: p.originalQuantity, initialStop: p.initialStop,
       exitReason: reason, grossPnl: gross, fees, funding: p.funding, netPnl: net, r: risk > 0 ? net / risk : 0,
+      bars: p.bars, mfeR, maeR,
     });
     open.delete(p.symbol);
   };
@@ -205,6 +218,7 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
                 entryPrice: fillPrice, quantity: size.quantity, leverage: size.leverage, stop: pend.stop, initialStop: pend.stop,
                 fees: fee, funding: 0, mark: fillPrice, exitPending: false,
                 originalQuantity: size.quantity, tpFilled: 0, partialGross: 0, partialExitValue: 0,
+                best: fillPrice, worst: fillPrice, bars: 0,
               });
             }
           }
@@ -223,6 +237,10 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
       if (pos) {
         // Pessimistic: settlements inside this candle are charged even if the stop hits in it.
         pos.funding += fundingCost(pos, c.openTime, c.closeTime, c.open);
+        // Excursions for analysis only. A stop candle counts its full range (order inside is unknown).
+        pos.bars++;
+        pos.best = Math.max(pos.best, c.high);
+        pos.worst = Math.min(pos.worst, c.low);
         if (pos.side === "LONG" && c.low <= pos.stop) closePos(pos, Math.min(c.open, pos.stop), c.openTime, "STOP");
         else if (pos.side === "SHORT" && c.high >= pos.stop) closePos(pos, Math.max(c.open, pos.stop), c.openTime, "STOP");
         else if (strategy.takeProfit) takeProfits(pos, c, strategy.takeProfit);
