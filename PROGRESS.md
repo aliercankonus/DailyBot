@@ -270,6 +270,30 @@ Findings:
 - Short-horizon ideas (10-day max/min, volatility breakout, hour-of-day seasonality) have real gross effects in the papers but do not survive 0.1% per side costs on futures; Connors RSI(2) wins 60% of trades and still loses (the same high-win-rate trap as the old TP ladder).
 - MACD and squeeze look fine after 2025 but lose before it: no stable edge.
 
+### 2026-11-18 — Round 10: Supertrend robustness, relative value vs BTC, portfolios (image 5143e09)
+
+Supertrend(10,3) daily, 20 coins, 0.5% risk: OOS PF across ±20% of period and multiplier 1.16 / 1.30 / 1.16 / 1.30 (no cliff). 2025 trades PF 0.82 but the 2025 equity year is +3.1%.
+
+Relative value vs BTC (dollar-neutral, standard settings) — all fail:
+| | Full CAGR | Sharpe | Max DD | Notes |
+|---|---|---|---|---|
+| ETH/BTC z-score reversion (20, 2) | −26.1% | −0.65 | 89.8% | ETH/BTC trended for years; reversion keeps fighting it |
+| 19 alts/BTC reversion | −23.1% | −0.88 | 86.5% | same |
+| 19 alts/BTC ratio trend (50d) | 11.8% | 0.51 | 44.4% | 2021 +161%, then mostly losing; OOS Sharpe −0.48 |
+
+Portfolios (daily rebalanced; each leg with its own default risk):
+| | Correlations | 2020 | 2021 | 2022 | 2023 | 2024 | 2025 | 2026 | CAGR | Sharpe | Max DD | From 2025 Sharpe / DD |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Supertrend-1d + G-LS (50/50) | 0.60 | +33.5% | +38.5% | +11.2% | +22.5% | +23.5% | −7.4% | +21.9% | 20.0% | 0.98 | 22.9% | 0.43 / 15.7% |
+| Supertrend-1d + A-LV+timestop (50/50) | 0.32 | +1.7% | +24.9% | +8.4% | +32.1% | +6.3% | +21.8% | +5.5% | 14.1% | 0.90 | 20.3% | **0.79** / 20.3% |
+| **Supertrend-1d + A-LV+timestop + G-LS (⅓ each)** | 0.32 / 0.60 / 0.35 | +21.7% | +27.1% | +13.7% | +25.3% | +18.4% | +7.4% | +14.8% | 18.5% | **1.04** | **18.6%** | 0.68 / 16.8% |
+| (previous best: A-LV+timestop + G-LS) | 0.35 | +32.2% | +17.0% | +21.7% | +20.5% | +25.8% | +9.2% | +16.6% | 20.6% | 0.99 | 20.7% | 0.66 / 20.7% |
+
+Findings:
+- The three-way portfolio is the best result of the project: positive every year 2020-2026, Sharpe 1.04 (first above 1.0), max drawdown 18.6% (first under the 20% limit), from 2025 Sharpe 0.68 and DD 16.8%. Supertrend was taken from public sources at its default settings and only tested here, which adds independent evidence; it is correlated with G-LS (0.60) but not with A (0.32).
+- Relative-value (pairs) ideas do not work on these coins at standard settings.
+- Recommended paper portfolio is now the three-way split. Parameters frozen as before.
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
