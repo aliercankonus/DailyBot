@@ -47,7 +47,7 @@ Binance USDⓈ-M futures bot (long + short) with a proven out-of-sample edge, ru
 
 ## Next
 0. Decide: build engine support for weight strategies (daily rebalance orders + exchange-side catastrophic stops) and forward-test G-LS (and G) in paper mode at a 15% vol target. This is the only out-of-sample test left that is not contaminated by research.
-2. Phase 1 continues: candidate A failed the gate; research candidates B (1h pullback with 4h trend filter) and C (mean reversion), same acceptance criteria.
+1. Old-bot ideas: done (three rounds, all fail; see Backtest results).
 3. Testnet run: confirm `BINANCE_STOP_API`, full order lifecycle.
 4. Dashboard (React) reading the API.
 5. Not yet done: Docker image build was not tested in the build environment (no Docker daemon); first `docker compose up --build` on the VPS is the check.
@@ -127,6 +127,40 @@ Findings:
 - Robustness: ±20% on volTarget/volLookback/maxGross changes OOS Sharpe by at most ~0.2; no cliff.
 - Drawdown scales roughly with the volatility target: at a 15% target, G-LS max DD would be ~20%.
 - About ten candidates have now been tested on the same data; treat the best in-sample numbers with suspicion. The only clean test left is forward (paper) trading.
+
+### 2026-11-18 — Old-bot ideas, three rounds (image 11c9014, same costs and funding, split 2025-01-01)
+
+Round 1: cleaned old strategies (S1/S3/S4 daily on 20 coins from 2020, S2 4h on 5 coins from 2021)
+
+| | IS PF | OOS trades | OOS PF | OOS DD | Full CAGR | Full Sharpe | Losing years |
+|---|---|---|---|---|---|---|---|
+| S1 failed breakout | 0.74 | 639 | 0.90 | 25.3% | −14.2% | −0.78 | 6 of 7 |
+| S2 squeeze breakout | 0.90 | 402 | 1.03 | 32.9% | −5.2% | −0.07 | 4 of 6 |
+| S3 capitulation | 0.27 | 78 | 1.29 | 4.3% | −5.4% | −1.47 | 5 of 7 |
+| S4 daily pullback | 0.77 | 259 | 0.94 | — | −3.6% | −0.44 | 5 of 7 |
+
+Round 2: old exit mechanisms as overlays on A (4h breakout, 5 coins)
+
+| | IS PF | OOS PF | OOS E | OOS DD | Full Sharpe | 2026 |
+|---|---|---|---|---|---|---|
+| A baseline | 1.25 | 1.12 | — | 34.8% | ~0.74 | — |
+| A+be (stop to entry+0.2% after 1R) | 1.30 | 1.11 | 0.10R | 33.9% | 0.74 | −6.2% |
+| A+lock (tiered profit lock) | 1.34 | 1.04 | 0.05R | 36.9% | 0.77 | −17.2% |
+| A+trail (R trailing from 1.2R) | 1.17 | 1.04 | 0.05R | 37.9% | 0.56 | −15.2% |
+| A+timestop (cut non-moving losers) | 1.21 | 1.14 | 0.12R | 34.0% | 0.67 | −2.4% |
+
+Round 3: old risk modifiers (`--dd-scale --loss-streak`)
+
+| | IS PF | OOS PF | OOS DD | Full CAGR | Full Sharpe | Full DD |
+|---|---|---|---|---|---|---|
+| A + risk modifiers | 1.21 | 1.01 | 19.1% | 5.8% | 0.47 | 17.8% |
+| A+timestop + risk modifiers | 1.16 | 1.03 | 18.4% | 4.4% | 0.40 | 17.2% |
+
+Findings:
+- All fail. The old strategies have no edge after costs (S1-S4 negative over the full period; S3's OOS PF 1.29 rests on 78 trades after an IS PF of 0.27).
+- Exit overlays move results by a few hundredths of PF; profit locks and R trailing raise IS PF and lower OOS PF (overfit signature: they cut the large winners a trend system lives on). Only the time stop is neutral-to-slightly positive.
+- Risk modifiers halve drawdown but cut return by more (Sharpe 0.74 → 0.47): trend losses cluster just before the big winners, so de-risking after losses misses them. Lower fixed risk gives the same drawdown at a better Sharpe.
+- Conclusion: the old bot's problems were execution and complexity, not missing filters; none of its ideas adds an edge. Best candidates remain G / G-LS (forward test).
 
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
