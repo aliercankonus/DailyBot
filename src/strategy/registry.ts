@@ -29,6 +29,14 @@ export const STRATEGIES = {
     integerKeys: new Set(["entryLookback", "emaFast", "emaSlow", "atrPeriod"]),
     create: (p) => createTrendBreakout({ ...DEFAULT_TREND_BREAKOUT, ...p }),
   },
+  // A with the volatility filter: no new entries when ATR >= 3% of price at the signal candle.
+  trendlv: {
+    label: "A-LV",
+    interval: "4h",
+    defaults: { ...DEFAULT_TREND_BREAKOUT, maxAtrPct: 0.03 },
+    integerKeys: new Set(["entryLookback", "emaFast", "emaSlow", "atrPeriod"]),
+    create: (p) => createTrendBreakout({ ...DEFAULT_TREND_BREAKOUT, maxAtrPct: 0.03, ...p }),
+  },
   pullback: {
     label: "B",
     interval: "1h",

@@ -2,7 +2,7 @@
 // Entry: the closed candle breaks the prior N-bar high (long) or low (short)
 //        while the fast EMA is on the same side of the slow EMA and price is beyond the slow EMA.
 // Stop:  entry -/+ stopAtr * ATR. Then a chandelier trailing stop that only tightens.
-// Six parameters, all listed in DEFAULT_TREND_BREAKOUT.
+// Parameters are listed in DEFAULT_TREND_BREAKOUT (maxAtrPct 0 = volatility filter off).
 import { atr, ema, priorHighest, priorLowest } from "../core/indicators.js";
 import type { Candle, OpenPositionView, Signal } from "../core/types.js";
 import type { Strategy } from "./types.js";
@@ -14,6 +14,8 @@ export interface TrendBreakoutParams {
   atrPeriod: number;
   stopAtr: number;
   trailAtr: number;
+  /** Skip signals when ATR/price at the signal candle is at or above this (0 = off). */
+  maxAtrPct: number;
 }
 
 export const DEFAULT_TREND_BREAKOUT: TrendBreakoutParams = {
@@ -23,13 +25,14 @@ export const DEFAULT_TREND_BREAKOUT: TrendBreakoutParams = {
   atrPeriod: 14,
   stopAtr: 2,
   trailAtr: 3,
+  maxAtrPct: 0,
 };
 
 export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAKOUT): Strategy {
   const warmup = Math.max(p.emaSlow, p.entryLookback + 1, p.atrPeriod) + 1;
 
   return {
-    name: `trend-breakout(${p.entryLookback},${p.emaFast}/${p.emaSlow},atr${p.atrPeriod}x${p.stopAtr}/${p.trailAtr})`,
+    name: `trend-breakout(${p.entryLookback},${p.emaFast}/${p.emaSlow},atr${p.atrPeriod}x${p.stopAtr}/${p.trailAtr}${p.maxAtrPct > 0 ? `,atr<${p.maxAtrPct * 100}%` : ""})`,
     interval: "4h",
     warmup,
 
@@ -44,6 +47,8 @@ export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAK
       const hi = priorHighest(candles, p.entryLookback)[i]!;
       const lo = priorLowest(candles, p.entryLookback)[i]!;
       if (![fast, slow, a, hi, lo].every(Number.isFinite) || a <= 0) return null;
+      // Volatility filter: breakouts in very volatile conditions were losers in both periods (PROGRESS.md, round 7).
+      if (p.maxAtrPct > 0 && a / c.close >= p.maxAtrPct) return null;
 
       if (c.close > hi && fast > slow && c.close > slow) {
         return {

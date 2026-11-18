@@ -204,6 +204,24 @@ Findings:
 
 Findings: the portfolio rules cut drawdown by ~7 points (fewer correlated positions), but return falls more than risk, so Sharpe drops. They are a risk-budget choice, not an edge. 2026 remains the losing year in every variant; the next step is to find out why (loss attribution, `--analyze`).
 
+### 2026-11-18 — Round 7: loss attribution of A (`--analyze`, 957 trades 2021-2026, 321 OOS)
+
+Where the result comes from (all data, sum of R):
+- Winners: 66 trades of 3R+ (7% of trades) = +364R; 94 trades of 1-3R = +168R; 168 small winners = +74R.
+- Losers: never more than 0.25R in profit (bad entry/false breakout) 201 trades = −208R; 0.25-1R then stopped 308 = −235R; 1R+ then given back 120 = −37R.
+- By time held: 1-6 candles 247 trades = −197R (false breakouts); 19+ candles 312 trades = +395R.
+- Longest losing streak: 23 trades (OOS). At 1% risk that is a ~20% drawdown by itself.
+
+Causes and what follows from them:
+1. Giving back profit is a small cost (−37R). That is why break-even, lock, trail, stepped stops and TP ladders cannot help: they cut the +364R from big winners to save a fraction of −37R.
+2. Most losses are false breakouts that never work (−443R in two groups). They are the price of catching the 7% big trends; only filters that remove false breakouts without removing big trends can help. The loser time stop (closes non-movers early) is the one exit that targets this group and is the one that helped.
+3. Volatility at entry: ATR/price <1% PF 2.3, 1-2% 1.20, 2-3% 1.04, >=3% 0.88 (all data); OOS >=3% PF 0.10 (21 trades); in-sample >=3% avgR +0.06 vs 0.98 for <1%. Same direction in both periods → testable filter (`trendlv`, maxAtrPct 3%).
+4. ADX at signal >=30: OOS PF 0.63/0.29, but in-sample ADX>=30 trades were as good as ADX<30 (avgR ~0.16 vs ~0.13). An ADX cap would be fitted to the OOS period — not adopted.
+5. Shorts are weaker than longs (PF 1.07 vs 1.29) but positive in both periods and they carry 2022 and 2026; shorts while BTC is above its EMA200 lose (PF 0.68, 45 trades) — small sample, noted only.
+6. 2026: longs win 18% (PF 0.77), shorts PF 1.13. A choppy, falling year for breakouts; worst months 2026-05, 2026-10, 2026-07.
+
+How to reduce losses (in order of evidence): (a) lower risk per trade (DD scales with risk: 0.5% ≈ half the drawdown, the 23-loss streak ≈ −11%); (b) the loser time stop; (c) volatility filter (round 8); (d) combine with an uncorrelated return stream (G-LS) instead of adding more filters to A.
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.

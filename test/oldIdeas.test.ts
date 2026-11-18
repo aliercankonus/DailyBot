@@ -138,6 +138,15 @@ describe("exit overlays (R units)", () => {
     expect(wrapped.updateStop({ ...pos, stop: 108 }, c([100, 111]))).toBeGreaterThanOrEqual(108);
   });
 
+  it("volatility filter skips breakouts when ATR is a large share of price", () => {
+    const closes = [...Array.from({ length: 260 }, (_, i) => 100 * 1.002 ** i)];
+    closes.push(closes.at(-1)! * 1.03);
+    const calm = candlesFromCloses(closes, T0, H4, 0.002);
+    expect(createTrendBreakout().evaluate("X", calm)?.side).toBe("LONG");
+    expect(createTrendBreakout({ ...getStrategy("trend").defaults, maxAtrPct: 0.001 } as never).evaluate("X", calm)).toBeNull();
+    expect(getStrategy("trendlv").create().name).toContain("atr<3%");
+  });
+
   it("registry resolves base+preset names", () => {
     const e = getStrategy("trend+lock");
     expect(e.label).toBe("A+lock");
