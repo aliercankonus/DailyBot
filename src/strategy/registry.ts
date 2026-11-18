@@ -97,7 +97,8 @@ export const STRATEGY_NAMES = Object.keys(STRATEGIES) as StrategyName[];
  * strategy with an exit overlay from EXIT_PRESETS, so every exit idea can be tested on every strategy.
  */
 export function getStrategy(name: string): StrategyEntry {
-  const plus = name.indexOf("+");
+  // lastIndexOf: presets compose left to right, e.g. "trend+tp12+timestop".
+  const plus = name.lastIndexOf("+");
   if (plus > 0) {
     const base = getStrategy(name.slice(0, plus));
     const preset = name.slice(plus + 1);

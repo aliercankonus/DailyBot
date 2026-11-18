@@ -10,7 +10,7 @@
 //  * early invalidation: after earlyBars candles, exit if MFE < 0.1 R and close <= -0.4 R.
 // Stops only ever tighten: overlays take the more protective of the base and overlay stop.
 import type { Candle, OpenPositionView } from "../core/types.js";
-import type { Strategy } from "./types.js";
+import type { Strategy, TakeProfitPlan } from "./types.js";
 
 export interface ExitOverlay {
   breakEvenAt?: number;      // R
@@ -21,6 +21,8 @@ export interface ExitOverlay {
   loserBars?: number;
   loserR?: number;
   earlyBars?: number;
+  /** Partial take-profits; executed intrabar by the backtest (see Strategy.takeProfit). */
+  takeProfit?: TakeProfitPlan;
 }
 
 const LOCK_TIERS: [number, number][] = [[5, 3], [4, 2], [3, 1.5], [2.5, 1], [2, 0.75], [1.5, 0.5], [1, 0.25]];
@@ -77,6 +79,7 @@ export function withExits(base: Strategy, o: ExitOverlay, tag: string): Strategy
   return {
     ...base,
     name: `${base.name} + ${tag}`,
+    takeProfit: o.takeProfit ?? base.takeProfit,
     updateStop(p, candles) {
       const b = base.updateStop(p, candles);
       return overlayStop(o, { ...p, stop: b }, candles);
@@ -93,4 +96,9 @@ export const EXIT_PRESETS: Record<string, ExitOverlay> = {
   lock: { lockTiers: true },
   trail: { trailAt: 1.2, trailDist: 0.75 },
   timestop: { loserBars: 6, loserR: 0.5, earlyBars: 3 },
+  // Partial take-profits (TP1/TP2); the runner keeps the strategy's trailing stop.
+  tp1: { takeProfit: { levels: [{ r: 1, fraction: 0.5 }], breakEvenAfterFirst: true } },
+  tp12: { takeProfit: { levels: [{ r: 1, fraction: 1 / 3 }, { r: 2, fraction: 1 / 3 }], breakEvenAfterFirst: true } },
+  tp23: { takeProfit: { levels: [{ r: 1.5, fraction: 0.4 }, { r: 3, fraction: 0.3 }], breakEvenAfterFirst: true } },
+  tp2: { takeProfit: { levels: [{ r: 2, fraction: 0.5 }], breakEvenAfterFirst: true } },
 };

@@ -31,4 +31,16 @@ export interface Strategy {
    * The backtest fills it at the next candle's open; the live engine closes at market.
    */
   shouldExit?(position: OpenPositionView, candles: Candle[]): boolean;
+  /**
+   * Optional partial take-profits (TP1, TP2, ...). Each level closes `fraction` of the ORIGINAL
+   * quantity when price reaches entry +/- r x R (R = |entry - initialStop|). With
+   * breakEvenAfterFirst, the stop moves to entry (+ fee buffer) once TP1 has filled.
+   * The remainder keeps the strategy's own stop and exits.
+   */
+  readonly takeProfit?: TakeProfitPlan;
+}
+
+export interface TakeProfitPlan {
+  levels: readonly { r: number; fraction: number }[];
+  breakEvenAfterFirst: boolean;
 }

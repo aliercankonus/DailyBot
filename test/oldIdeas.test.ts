@@ -163,6 +163,54 @@ describe("risk modifiers in the backtest", () => {
     expect(ratio(mod, 2) / ratio(base, 2)).toBeCloseTo(1, 1);
   });
 
+  it("partial take-profits: TP1 at 1R, break-even, runner stopped at break-even = one trade", () => {
+    // Enter at the open of bar 2 (100), stop 90. Bar 2 reaches 110 (TP1, half closed) but also
+    // trades at 100: the rest is assumed stopped at break-even in the same candle (pessimistic).
+    const once: Strategy = {
+      name: "once", interval: "1d", warmup: 1,
+      evaluate: (symbol, cs) => (cs.length === 2 ? { symbol, side: "LONG", refPrice: 100, stop: 90, candleOpenTime: cs.at(-1)!.openTime, reason: "t" } : null),
+      updateStop: (p) => p.stop,
+      takeProfit: { levels: [{ r: 1, fraction: 0.5 }], breakEvenAfterFirst: true },
+    };
+    const k = [bar(T0, 100, 100, 100, 100), bar(T0 + D1, 100, 100, 100, 100), bar(T0 + 2 * D1, 100, 110, 100, 108), bar(T0 + 3 * D1, 105, 106, 99, 100), bar(T0 + 4 * D1, 100, 100, 100, 100)];
+    const r = runBacktest(once, { X: k }, free);
+    expect(r.trades).toHaveLength(1);
+    const t = r.trades[0]!;
+    expect(t.exitReason).toBe("STOP");
+    expect(t.exitPrice).toBeCloseTo(105); // half at 110, half at 100
+    expect(t.r).toBeCloseTo(0.5);
+    expect(r.finalEquity - free.initialEquity).toBeCloseTo(t.netPnl);
+  });
+
+  it("a candle that touches both the stop and TP1 is a stop-out", () => {
+    const once: Strategy = {
+      name: "once", interval: "1d", warmup: 1,
+      evaluate: (symbol, cs) => (cs.length === 2 ? { symbol, side: "SHORT", refPrice: 100, stop: 110, candleOpenTime: cs.at(-1)!.openTime, reason: "t" } : null),
+      updateStop: (p) => p.stop,
+      takeProfit: { levels: [{ r: 1, fraction: 0.5 }], breakEvenAfterFirst: true },
+    };
+    const k = [bar(T0, 100, 100, 100, 100), bar(T0 + D1, 100, 100, 100, 100), bar(T0 + 2 * D1, 100, 111, 89, 100), bar(T0 + 3 * D1, 100, 100, 100, 100)];
+    const t = runBacktest(once, { X: k }, free).trades[0]!;
+    expect(t.exitReason).toBe("STOP");
+    expect(t.r).toBeCloseTo(-1);
+  });
+
+  it("all levels filled closes the whole position; presets compose", () => {
+    const once: Strategy = {
+      name: "once", interval: "1d", warmup: 1,
+      evaluate: (symbol, cs) => (cs.length === 2 ? { symbol, side: "LONG", refPrice: 100, stop: 90, candleOpenTime: cs.at(-1)!.openTime, reason: "t" } : null),
+      updateStop: (p) => p.stop,
+      takeProfit: { levels: [{ r: 1, fraction: 0.5 }, { r: 2, fraction: 0.5 }], breakEvenAfterFirst: false },
+    };
+    const k = [bar(T0, 100, 100, 100, 100), bar(T0 + D1, 100, 100, 100, 100), bar(T0 + 2 * D1, 100, 125, 100, 120), bar(T0 + 3 * D1, 120, 120, 120, 120)];
+    const r = runBacktest(once, { X: k }, free);
+    expect(r.trades).toHaveLength(1);
+    expect(r.trades[0]!.r).toBeCloseTo(1.5);
+    const e = getStrategy("trend+tp12+timestop");
+    expect(e.label).toBe("A+tp12+timestop");
+    expect(e.create().takeProfit?.levels).toHaveLength(2);
+  });
+
   it("drawdown scaling reduces risk as equity falls", () => {
     const base = runBacktest(loser, { X: c }, free);
     const mod = runBacktest(loser, { X: c }, { ...free, riskModifiers: { ddScale: true } });

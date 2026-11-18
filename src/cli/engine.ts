@@ -117,6 +117,9 @@ try {
   const strategy = getStrategy(cfg.STRATEGY).create();
   const intervalMs = INTERVAL_MS[strategy.interval];
   if (!intervalMs) throw new Error(`strategy interval ${strategy.interval} is not supported`);
+  // Partial take-profits exist only in the backtest so far; trading without them live would not
+  // be the strategy that was tested.
+  if (strategy.takeProfit) throw new Error(`strategy ${cfg.STRATEGY} uses partial take-profits, which the live engine does not support yet`);
   if (strategy.interval !== cfg.INTERVAL) log("info", `INTERVAL=${cfg.INTERVAL} ignored; strategy ${cfg.STRATEGY} uses ${strategy.interval}`);
   const engine = new Engine({
     exchange: ex.exchange, repo, notifier, strategy,

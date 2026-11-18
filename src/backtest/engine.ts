@@ -5,6 +5,12 @@
 //  * Every fill pays taker fee + slippage. Open positions pay funding at each 8h UTC settlement
 //    (00:00, 08:00, 16:00) that falls inside a held candle strictly after entry, on mark notional
 //    (quantity x that candle's open).
+//  * Partial take-profits (Strategy.takeProfit) are checked intrabar AFTER the stop (pessimistic:
+//    a candle that touches both is a stop-out). A TP fills at its level minus slippage, never better.
+//    If TP1 moves the stop to break-even and the same candle also reaches break-even, the rest is
+//    assumed stopped there (the order of high and low inside a candle is unknown).
+//    A trade with partial fills is still ONE trade: quantity is the original size, exitPrice the
+//    quantity-weighted average, r the net PnL over the original risk.
 //  * Sizing and portfolio limits use the same code as live (sizePosition with round-trip costs,
 //    maxOpenPositions). Sizing equity is mark-to-market: cash + unrealized - accrued funding.
 //  * The strategy receives at most STRATEGY_WINDOW closed candles, exactly like the live engine,
@@ -15,7 +21,7 @@
 import type { Candle, Side } from "../core/types.js";
 import type { FundingPoint, SymbolFilters } from "../exchange/types.js";
 import { sizePosition } from "../risk/sizing.js";
-import { STRATEGY_WINDOW, type Strategy } from "../strategy/types.js";
+import { STRATEGY_WINDOW, type Strategy, type TakeProfitPlan } from "../strategy/types.js";
 
 export interface BacktestConfig {
   initialEquity: number;
@@ -91,6 +97,12 @@ interface OpenPos {
   mark: number;
   /** Strategy asked to exit on the previous close; filled at this candle's open. */
   exitPending: boolean;
+  /** Size at entry; `quantity` is what is still open after partial take-profits. */
+  originalQuantity: number;
+  tpFilled: number;
+  /** Gross PnL and exit notional already realized by partial take-profits. */
+  partialGross: number;
+  partialExitValue: number;
 }
 
 const EIGHT_HOURS = 8 * 3600_000;
@@ -122,15 +134,17 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
   const closePos = (p: OpenPos, rawPrice: number, time: number, reason: BacktestTrade["exitReason"]) => {
     const exitPrice = p.side === "LONG" ? rawPrice * (1 - cfg.slippage) : rawPrice * (1 + cfg.slippage);
     const exitFee = exitPrice * p.quantity * cfg.takerFee;
-    const gross = (p.side === "LONG" ? exitPrice - p.entryPrice : p.entryPrice - exitPrice) * p.quantity;
+    const restGross = (p.side === "LONG" ? exitPrice - p.entryPrice : p.entryPrice - exitPrice) * p.quantity;
+    const gross = p.partialGross + restGross;
     const fees = p.fees + exitFee;
     const net = gross - fees - p.funding;
-    const risk = Math.abs(p.entryPrice - p.initialStop) * p.quantity;
-    cash += gross - exitFee - p.funding; // entry fee was already deducted at entry
+    const risk = Math.abs(p.entryPrice - p.initialStop) * p.originalQuantity;
+    cash += restGross - exitFee - p.funding; // entry and partial-exit fees were already deducted
     lossStreak = net > 0 ? 0 : lossStreak + 1;
+    const avgExit = (p.partialExitValue + exitPrice * p.quantity) / p.originalQuantity;
     trades.push({
       symbol: p.symbol, side: p.side, entryTime: p.entryTime, exitTime: time,
-      entryPrice: p.entryPrice, exitPrice, quantity: p.quantity, initialStop: p.initialStop,
+      entryPrice: p.entryPrice, exitPrice: avgExit, quantity: p.originalQuantity, initialStop: p.initialStop,
       exitReason: reason, grossPnl: gross, fees, funding: p.funding, netPnl: net, r: risk > 0 ? net / risk : 0,
     });
     open.delete(p.symbol);
@@ -171,6 +185,7 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
                 symbol: s, side: pend.side, entryTime: c.openTime, entryCandleOpenTime: c.openTime,
                 entryPrice: fillPrice, quantity: size.quantity, leverage: size.leverage, stop: pend.stop, initialStop: pend.stop,
                 fees: fee, funding: 0, mark: fillPrice, exitPending: false,
+                originalQuantity: size.quantity, tpFilled: 0, partialGross: 0, partialExitValue: 0,
               });
             }
           }
@@ -191,6 +206,7 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
         pos.funding += fundingCost(pos, c.openTime, c.closeTime, c.open);
         if (pos.side === "LONG" && c.low <= pos.stop) closePos(pos, Math.min(c.open, pos.stop), c.openTime, "STOP");
         else if (pos.side === "SHORT" && c.high >= pos.stop) closePos(pos, Math.max(c.open, pos.stop), c.openTime, "STOP");
+        else if (strategy.takeProfit) takeProfits(pos, c, strategy.takeProfit);
       }
 
       // 3) Candle closed: trail the stop, or look for a new entry.
@@ -229,6 +245,42 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
     equityCurve.push({ time: endTime, equity: cash });
   }
   return { trades, equityCurve, finalEquity: cash };
+
+  /** Fill every take-profit level this candle reached; then apply the break-even rule. */
+  function takeProfits(p: OpenPos, c: Candle, plan: TakeProfitPlan) {
+    const r = Math.abs(p.entryPrice - p.initialStop);
+    const dir = p.side === "LONG" ? 1 : -1;
+    while (p.tpFilled < plan.levels.length) {
+      const lvl = plan.levels[p.tpFilled]!;
+      const target = p.entryPrice + dir * lvl.r * r;
+      if (dir === 1 ? c.high < target : c.low > target) break;
+      const qty = Math.min(p.quantity, p.originalQuantity * lvl.fraction);
+      const exitPrice = target * (1 - dir * cfg.slippage);
+      const fee = exitPrice * qty * cfg.takerFee;
+      const gross = dir * (exitPrice - p.entryPrice) * qty;
+      cash += gross - fee;
+      p.fees += fee;
+      p.partialGross += gross;
+      p.partialExitValue += exitPrice * qty;
+      p.quantity -= qty;
+      p.tpFilled++;
+      if (p.quantity <= p.originalQuantity * 1e-9) {
+        // Nothing left: book the trade (zero remaining quantity adds no fill or fee).
+        p.quantity = 0;
+        closePos(p, target, c.openTime, "SIGNAL");
+        return;
+      }
+      if (p.tpFilled === 1 && plan.breakEvenAfterFirst) {
+        // Break-even covers the round-trip cost of the remainder.
+        const be = p.entryPrice * (1 + dir * 2 * (cfg.takerFee + cfg.slippage));
+        p.stop = dir === 1 ? Math.max(p.stop, be) : Math.min(p.stop, be);
+        if (dir === 1 ? c.low <= p.stop : c.high >= p.stop) {
+          closePos(p, p.stop, c.openTime, "STOP");
+          return;
+        }
+      }
+    }
+  }
 
   /** Funding paid (positive) or received (negative) for settlements in [from, to] after entry. */
   function fundingCost(p: OpenPos, from: number, to: number, price: number): number {
