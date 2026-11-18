@@ -27,10 +27,12 @@ describe.skipIf(!url)("account registry (postgres)", () => {
   afterAll(async () => { await pool.end(); });
 
   it("lets an engine re-register its own key and refuses the same key for another engine", async () => {
-    await registerEngineAccount(pool, "key-A", "A");
-    await registerEngineAccount(pool, "key-A", "A"); // restart of the same engine
-    await registerEngineAccount(pool, "key-ST", "ST");
-    await expect(registerEngineAccount(pool, "key-A", "GLS")).rejects.toThrow(/already registered by engine A/);
+    await registerEngineAccount(pool, "key-A", "A", "trader");
+    await registerEngineAccount(pool, "key-A", "A", "trader"); // restart of the same engine
+    await registerEngineAccount(pool, "key-ST", "ST", "trader_st");
+    await expect(registerEngineAccount(pool, "key-A", "GLS", "trader_gls")).rejects.toThrow(/already registered by engine A .*DELETE FROM engine_accounts/);
+    // A copied service that kept BOT_NAME and the key but uses another database is refused too.
+    await expect(registerEngineAccount(pool, "key-ST", "ST", "trader_st2")).rejects.toThrow(/database trader_st/);
     const { rows } = await pool.query("SELECT fingerprint FROM engine_accounts");
     expect(JSON.stringify(rows)).not.toContain("key-A");
   });

@@ -59,11 +59,11 @@ export function paperStats(trades: ClosedTrade[], equity: EquityPoint[]): PaperS
   let annualVol: number | null = null;
   if (rets.length >= 5) {
     const m = rets.reduce((a, b) => a + b, 0) / rets.length;
-    annualVol = Math.sqrt(rets.reduce((a, b) => a + (b - m) ** 2, 0) / rets.length) * Math.sqrt(365);
+    annualVol = Math.sqrt(rets.reduce((a, b) => a + (b - m) ** 2, 0) / (rets.length - 1)) * Math.sqrt(365);
   }
   const wins = trades.filter((t) => t.realizedPnl > 0);
   const grossWin = wins.reduce((a, t) => a + t.realizedPnl, 0);
-  const grossLoss = -trades.filter((t) => t.realizedPnl <= 0).reduce((a, t) => a + t.realizedPnl, 0);
+  const grossLoss = -trades.filter((t) => t.realizedPnl < 0).reduce((a, t) => a + t.realizedPnl, 0);
   const rs = trades.filter((t) => t.riskAmount > 0).map((t) => t.realizedPnl / t.riskAmount);
   return {
     days, startEquity, endEquity,
@@ -72,7 +72,7 @@ export function paperStats(trades: ClosedTrade[], equity: EquityPoint[]): PaperS
     trades: trades.length,
     tradesPer30d: days >= 1 ? (trades.length / days) * 30 : null,
     winRate: trades.length ? wins.length / trades.length : null,
-    profitFactor: trades.length ? (grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0) : null,
+    profitFactor: grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : null,
     avgR: rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null,
     fees: trades.reduce((a, t) => a + t.fees, 0),
   };

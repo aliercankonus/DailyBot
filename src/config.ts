@@ -26,6 +26,8 @@ const Env = z.object({
   BOT_NAME: z.string().max(32).optional(),
   /** Main database holding engine_accounts; testnet/live engines register their API key there. */
   REGISTRY_DATABASE_URL: z.string().optional(),
+  /** "1" skips the one-account-per-engine check in testnet/live (logged at start). Not recommended. */
+  ALLOW_UNREGISTERED_ACCOUNT: z.enum(["0", "1"]).default("0"),
   RISK_PER_TRADE: pct.max(0.02, "risk per trade above 2% is refused").default(0.005),
   MAX_LEVERAGE: z.coerce.number().int().min(1).max(5).default(3),
   MAX_OPEN_POSITIONS: z.coerce.number().int().min(1).max(10).default(3),
@@ -64,8 +66,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, role: ConfigRol
     if (e.MODE !== "paper" && (!e.BINANCE_API_KEY || !e.BINANCE_API_SECRET)) {
       throw new Error(`MODE=${e.MODE} requires BINANCE_API_KEY and BINANCE_API_SECRET`);
     }
-    if (e.MODE !== "paper" && e.REGISTRY_DATABASE_URL && !e.BOT_NAME) {
-      throw new Error(`MODE=${e.MODE} with REGISTRY_DATABASE_URL requires BOT_NAME (the account registry is keyed by it)`);
+    if (e.MODE !== "paper" && e.ALLOW_UNREGISTERED_ACCOUNT !== "1" && (!e.REGISTRY_DATABASE_URL || !e.BOT_NAME)) {
+      throw new Error(`MODE=${e.MODE} requires REGISTRY_DATABASE_URL and BOT_NAME (one Binance account per engine); set ALLOW_UNREGISTERED_ACCOUNT=1 only for a single engine`);
     }
   }
   if (role === "api" && !e.API_TOKEN) throw new Error("API_TOKEN is required for the API process");

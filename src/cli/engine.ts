@@ -39,10 +39,12 @@ try {
   process.exit(1);
 }
 // A real exchange account may be traded by one engine only (see src/db/accountRegistry.ts).
-if (cfg.MODE !== "paper" && cfg.REGISTRY_DATABASE_URL) {
-  const reg = makePool({ DATABASE_URL: cfg.REGISTRY_DATABASE_URL });
+if (cfg.MODE !== "paper" && cfg.ALLOW_UNREGISTERED_ACCOUNT === "1") {
+  console.error(JSON.stringify({ level: "warn", msg: "ALLOW_UNREGISTERED_ACCOUNT=1: the one-account-per-engine check is OFF", time: new Date().toISOString() }));
+} else if (cfg.MODE !== "paper") {
+  const reg = makePool({ DATABASE_URL: cfg.REGISTRY_DATABASE_URL! });
   try {
-    await registerEngineAccount(reg, cfg.BINANCE_API_KEY, cfg.BOT_NAME!);
+    await registerEngineAccount(reg, cfg.BINANCE_API_KEY, cfg.BOT_NAME!, new URL(cfg.DATABASE_URL).pathname.slice(1));
   } catch (e) {
     console.error(JSON.stringify({ level: "fatal", msg: "account registry check failed", error: e instanceof Error ? e.message : String(e), time: new Date().toISOString() }));
     await new Promise((r) => setTimeout(r, 30_000));

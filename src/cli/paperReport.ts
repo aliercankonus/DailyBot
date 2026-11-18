@@ -11,12 +11,14 @@ const num = (x: number | null, d = 2) => (x === null ? "n/a" : Number.isFinite(x
 
 const dbs = Object.entries(process.env)
   .filter(([k, v]) => k.startsWith("REPORT_DB_") && v)
-  .map(([k, v]) => ({ bot: k.slice("REPORT_DB_".length), url: v! }));
+  .map(([k, v]) => ({ bot: k.slice("REPORT_DB_".length), url: v! }))
+  .sort((a, b) => a.bot.localeCompare(b.bot));
 if (!dbs.length) throw new Error("set REPORT_DB_<BOT>=<postgres url> for each engine database");
 
 let total = { start: 0, end: 0 };
 for (const { bot, url } of dbs) {
   const pool = new pg.Pool({ connectionString: url, max: 2 });
+  pool.on("error", () => {});
   try {
     const trades = (await pool.query("SELECT realized_pnl, risk_amount, fees, exit_time FROM positions WHERE status = 'CLOSED' ORDER BY exit_time")).rows
       .map((r) => ({ realizedPnl: Number(r.realized_pnl ?? 0), riskAmount: Number(r.risk_amount ?? 0), fees: Number(r.fees ?? 0), exitTime: Number(r.exit_time ?? 0) }));
@@ -41,6 +43,10 @@ for (const { bot, url } of dbs) {
     const flags = deviations(s, e);
     console.log(flags.length ? `CHECK: ${flags.join("; ")}` : "no deviation from the backtest beyond the thresholds");
     if (s.trades >= POST_MORTEM_EVERY) console.log(`POST-MORTEM: ${s.trades} closed trades (one every ${POST_MORTEM_EVERY}); compare with the backtest before changing anything, one versioned change at a time`);
+  } catch (e) {
+    // One unreachable database must not hide the other engines' reports.
+    console.log(`==================== ${bot}: report failed: ${e instanceof Error ? e.message : String(e)} ====================`);
+    process.exitCode = 1;
   } finally {
     await pool.end();
   }

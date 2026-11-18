@@ -62,5 +62,9 @@ CREATE TABLE IF NOT EXISTS bot_state (
 CREATE TABLE IF NOT EXISTS engine_accounts (
   fingerprint    TEXT PRIMARY KEY,
   bot_name       TEXT NOT NULL,
+  -- The engine's own database: two engines with the same BOT_NAME but different databases still clash.
+  instance       TEXT NOT NULL,
   registered_at  BIGINT NOT NULL
 );
+-- Added after the first version of the table (idempotent upgrade).
+ALTER TABLE engine_accounts ADD COLUMN IF NOT EXISTS instance TEXT NOT NULL DEFAULT '';

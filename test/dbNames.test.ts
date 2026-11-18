@@ -37,6 +37,15 @@ describe("engine STRATEGY", () => {
     expect(() => validateEngineStrategy("trendl", 3, resolve)).toThrow(/unknown strategy/);
     expect(() => validateEngineStrategy("donchianls+timestop", 3, resolve)).toThrow(/unknown strategy/);
   });
+  it("testnet/live engines need the account registry unless explicitly opted out", () => {
+    const keys = { MODE: "testnet", BINANCE_API_KEY: "k", BINANCE_API_SECRET: "s" };
+    expect(() => loadConfig(keys, "engine")).toThrow(/REGISTRY_DATABASE_URL and BOT_NAME/);
+    expect(() => loadConfig({ ...keys, REGISTRY_DATABASE_URL: "postgres://x/y" }, "engine")).toThrow(/BOT_NAME/);
+    expect(loadConfig({ ...keys, REGISTRY_DATABASE_URL: "postgres://x/y", BOT_NAME: "A" }, "engine").BOT_NAME).toBe("A");
+    expect(loadConfig({ ...keys, ALLOW_UNREGISTERED_ACCOUNT: "1" }, "engine").ALLOW_UNREGISTERED_ACCOUNT).toBe("1");
+    expect(loadConfig({}, "engine").MODE).toBe("paper"); // paper needs nothing
+  });
+
   it("config accepts strategy names and rejects anything else", () => {
     expect(loadConfig({}, "migrate").STRATEGY).toBe("trend");
     expect(loadConfig({ STRATEGY: "trendlv+timestop" }, "migrate").STRATEGY).toBe("trendlv+timestop");
