@@ -1,6 +1,7 @@
 // npm run backtest -- --strategy trend|pullback|meanrev|funding|tsmom|xsmom --split 2025-01-01
 //   [--symbols ...] [--risk 0.01] [--max-open 3] [--from ...] [--to ...] [--robustness]
 //   [--dd-scale] [--loss-streak]   (risk modifiers, single-symbol strategies only)
+//   [--max-same-dir 2] [--cooldown 3]   (portfolio rules: same-side cap, re-entry bars after a stop)
 // Defaults for symbols, risk and max-open come from the strategy (src/backtest/catalog.ts).
 //
 // Prints in-sample (before --split) and out-of-sample (from --split) results separately.
@@ -18,6 +19,13 @@ import { STRATEGY_WINDOW } from "../strategy/types.js";
 import { dateMs, parseArgs, str } from "./args.js";
 
 const a = parseArgs();
+/** Optional whole-number flag >= 1; a bad value is an error, not a silent "block everything". */
+function positiveInt(flag: string): number | undefined {
+  if (a[flag] === undefined) return undefined;
+  const n = Number(str(a[flag], ""));
+  if (!Number.isInteger(n) || n < 1) throw new Error(`--${flag} needs a whole number >= 1`);
+  return n;
+}
 const strategyName = str(a.strategy, "trend");
 const entry = getCatalogEntry(strategyName);
 const symbols = typeof a.symbols === "string" ? a.symbols.split(",") : entry.defaultSymbols;
@@ -33,6 +41,8 @@ const cfg: BacktestConfig = {
   riskPerTrade: Number(str(a.risk, String(entry.defaultRisk))),
   maxOpenPositions: Number(str(a["max-open"], String(entry.defaultMaxOpen))),
   riskModifiers: { ddScale: a["dd-scale"] === true, lossStreak: a["loss-streak"] === true },
+  maxSameDirection: positiveInt("max-same-dir"),
+  reentryCooldownBars: positiveInt("cooldown"),
 };
 
 const all: Record<string, Candle[]> = {};
@@ -79,7 +89,7 @@ function run(params: Params, start: number, end: number) {
 const isWeights = entry.kind === "weights";
 
 console.log(`strategy ${entry.label}: ${entry.describe(DEFAULTS)}  interval ${interval}  symbols ${Object.keys(all).join(",")}`);
-console.log(`costs: taker ${cfg.takerFee * 100}%/side, slippage ${cfg.slippage * 100}%/fill, funding ${cfg.fundingRates ? `historical (${Object.keys(cfg.fundingRates).length} symbols)` : `${cfg.fundingPer8h * 100}%/8h flat`}  risk ${cfg.riskPerTrade * 100}%/trade, max ${cfg.maxOpenPositions} open${cfg.riskModifiers?.ddScale ? ", dd-scale" : ""}${cfg.riskModifiers?.lossStreak ? ", loss-streak" : ""}\n`);
+console.log(`costs: taker ${cfg.takerFee * 100}%/side, slippage ${cfg.slippage * 100}%/fill, funding ${cfg.fundingRates ? `historical (${Object.keys(cfg.fundingRates).length} symbols)` : `${cfg.fundingPer8h * 100}%/8h flat`}  risk ${cfg.riskPerTrade * 100}%/trade, max ${cfg.maxOpenPositions} open${cfg.riskModifiers?.ddScale ? ", dd-scale" : ""}${cfg.riskModifiers?.lossStreak ? ", loss-streak" : ""}${cfg.maxSameDirection !== undefined ? `, max ${cfg.maxSameDirection} same side` : ""}${cfg.reentryCooldownBars ? `, cooldown ${cfg.reentryCooldownBars} bars` : ""}\n`);
 
 const ins = run(DEFAULTS, 0, split);
 console.log(`== IN-SAMPLE (before ${new Date(split).toISOString().slice(0, 10)}) ==\n${isWeights ? formatEquity(ins.eq) : formatMetrics(ins.m)}\n`);

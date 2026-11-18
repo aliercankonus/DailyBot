@@ -41,6 +41,14 @@ export interface BacktestConfig {
    */
   riskModifiers?: { ddScale?: boolean; lossStreak?: boolean };
   /**
+   * Portfolio rules from the old bot, fixed so they can be tested:
+   *  maxSameDirection: at most this many open positions on the same side (crypto moves together).
+   *  reentryCooldownBars: after a stop-out, no new entry on that symbol in the same direction for
+   *  this many candles (the opposite direction is allowed).
+   */
+  maxSameDirection?: number;
+  reentryCooldownBars?: number;
+  /**
    * Historical funding per symbol. When present, each settlement charges the real signed rate
    * (longs pay positive funding, shorts receive it) instead of the flat fundingPer8h cost.
    */
@@ -128,6 +136,8 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
   let lossStreak = 0;
   const open = new Map<string, OpenPos>();
   const pending = new Map<string, { side: Side; stop: number }>();
+  /** Per symbol: side and time until which a same-direction entry is blocked after a stop-out. */
+  const cooldown = new Map<string, { side: Side; until: number }>();
   const trades: BacktestTrade[] = [];
   const equityCurve: { time: number; equity: number }[] = [];
 
@@ -141,6 +151,11 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
     const risk = Math.abs(p.entryPrice - p.initialStop) * p.originalQuantity;
     cash += restGross - exitFee - p.funding; // entry and partial-exit fees were already deducted
     lossStreak = net > 0 ? 0 : lossStreak + 1;
+    if (reason === "STOP" && cfg.reentryCooldownBars) {
+      const k = data[p.symbol]!;
+      const iv = k.length > 1 ? k[1]!.openTime - k[0]!.openTime : 0;
+      cooldown.set(p.symbol, { side: p.side, until: time + cfg.reentryCooldownBars * iv });
+    }
     const avgExit = (p.partialExitValue + exitPrice * p.quantity) / p.originalQuantity;
     trades.push({
       symbol: p.symbol, side: p.side, entryTime: p.entryTime, exitTime: time,
@@ -161,7 +176,11 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
       const pend = pending.get(s);
       if (pend) {
         pending.delete(s);
-        if (!open.has(s) && open.size < cfg.maxOpenPositions && c.openTime >= (cfg.tradeFromMs ?? -Infinity)) {
+        const sameSide = [...open.values()].filter((o) => o.side === pend.side).length;
+        const cool = cooldown.get(s);
+        const blocked = (cfg.maxSameDirection !== undefined && sameSide >= cfg.maxSameDirection)
+          || (cool !== undefined && cool.side === pend.side && c.openTime <= cool.until);
+        if (!blocked && !open.has(s) && open.size < cfg.maxOpenPositions && c.openTime >= (cfg.tradeFromMs ?? -Infinity)) {
           const fillPrice = pend.side === "LONG" ? c.open * (1 + cfg.slippage) : c.open * (1 - cfg.slippage);
           // Skip if the open already gapped beyond the stop.
           const invalid = pend.side === "LONG" ? fillPrice <= pend.stop : fillPrice >= pend.stop;

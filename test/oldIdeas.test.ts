@@ -211,6 +211,28 @@ describe("risk modifiers in the backtest", () => {
     expect(e.create().takeProfit?.levels).toHaveLength(2);
   });
 
+  it("maxSameDirection caps open positions on one side", () => {
+    const always: Strategy = {
+      name: "always", interval: "1d", warmup: 1,
+      evaluate: (symbol, cs) => ({ symbol, side: "LONG", refPrice: cs.at(-1)!.close, stop: cs.at(-1)!.close * 0.5, candleOpenTime: cs.at(-1)!.openTime, reason: "t" }),
+      updateStop: (p) => p.stop,
+    };
+    const flat = candlesFromCloses(new Array(10).fill(100), T0, D1, 0);
+    const data = { A: flat, B: flat, C: flat };
+    expect(runBacktest(always, data, free).trades).toHaveLength(3);
+    expect(runBacktest(always, data, { ...free, maxSameDirection: 2 }).trades).toHaveLength(2);
+  });
+
+  it("re-entry cooldown blocks the same direction for N bars after a stop", () => {
+    // `loser` enters every 3rd bar and every trade is stopped on its entry bar.
+    const base = runBacktest(loser, { X: c }, free);
+    const cool = runBacktest(loser, { X: c }, { ...free, reentryCooldownBars: 4 });
+    expect(cool.trades.length).toBeLessThan(base.trades.length);
+    for (let i = 1; i < cool.trades.length; i++) {
+      expect(cool.trades[i]!.entryTime - cool.trades[i - 1]!.exitTime).toBeGreaterThan(4 * D1);
+    }
+  });
+
   it("drawdown scaling reduces risk as equity falls", () => {
     const base = runBacktest(loser, { X: c }, free);
     const mod = runBacktest(loser, { X: c }, { ...free, riskModifiers: { ddScale: true } });
