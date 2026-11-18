@@ -100,8 +100,8 @@ export const STRATEGIES = {
     create: (p) => createDailyPullback({ ...DEFAULT_DAILY_PULLBACK, ...p }),
   },
   // Round 9: the most recommended public strategies, at their published settings (src/strategy/popular.ts).
-  st4h: { label: "P1-4h", interval: "4h", defaults: {}, integerKeys: new Set<string>(), create: () => createSupertrend("4h") },
-  st1d: { label: "P1-1d", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createSupertrend("1d") },
+  st4h: { label: "P1-4h", interval: "4h", defaults: { period: 10, mult: 3 }, integerKeys: new Set(["period"]), create: (p) => createSupertrend("4h", p?.period ?? 10, p?.mult ?? 3) },
+  st1d: { label: "P1-1d", interval: "1d", defaults: { period: 10, mult: 3 }, integerKeys: new Set(["period"]), create: (p) => createSupertrend("1d", p?.period ?? 10, p?.mult ?? 3) },
   macd: { label: "P2", interval: "4h", defaults: {}, integerKeys: new Set<string>(), create: () => createMacd200() },
   sqzlb: { label: "P3", interval: "4h", defaults: {}, integerKeys: new Set<string>(), create: () => createSqueezeLazyBear() },
   ichi: { label: "P4", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createIchimoku() },

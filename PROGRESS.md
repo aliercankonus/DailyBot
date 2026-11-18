@@ -246,6 +246,30 @@ Findings:
 - A-LV + time stop + G-LS (50/50) is the best result of the project: positive in every calendar year 2020-2026, max drawdown 20.7%, Sharpe 0.99. The two legs lose in different years (A in 2026, G-LS in 2025), correlation 0.35. It still misses the strict out-of-sample gate (Sharpe 0.66 < 1.0 from 2025), and the volatility filter and time stop were chosen after seeing 2025-26 data, so the true forward result will be worse than this backtest.
 - About 35 variants have now been tested on the same 2020-2026 data. Decision: freeze the parameters here and treat paper trading from now on as the only valid test.
 
+### 2026-11-18 — Round 9: the most recommended public strategies at their published settings (image 31557d8, `--brief`)
+
+The user asked for a wide search of indicator and other methods (videos, blogs, papers). Sources: independent default-setting tests (edgoro.com, dev.to 49-strategy and tessen.ai 13-strategy reviews), LazyBear squeeze (TradingView), Padysak & Vojtko 2022 (SSRN 4081000) and Quantpedia follow-ups (10-day max/min, 21-23 UTC seasonality), Larry Williams volatility breakout, Turtle rules, Connors RSI(2). No parameter was tuned; daily strategies run on 20 coins at 0.5% risk, 4h/1h on 5 coins at 1%.
+
+| | Strategy | IS n / PF | OOS n / PF | OOS DD | 2025 / 2026 PF | Full CAGR | Sharpe | DD | Yearly |
+|---|---|---|---|---|---|---|---|---|---|
+| P1-1d | **Supertrend(10,3) daily** | 460 / 1.87 | 187 / 1.22 | 9.4% | 0.82 / 1.69 | 13.3% | 0.82 | 19.7% | +2.9 +46.7 −1.2 +33.9 +4.2 +3.1 +10.0 |
+| P1-4h | Supertrend(10,3) 4h | 654 / 1.22 | 333 / 1.06 | 28.2% | 1.25 / 0.91 | 10.9% | 0.59 | 27.8% | +23.4 −2.3 +11.8 +27.2 +13.5 −5.8 |
+| P2 | MACD + EMA200 4h | 588 / 0.96 | 293 / 1.23 | 21.4% | 1.21 / 1.24 | 3.3% | 0.27 | 30.5% | IS loses |
+| P3 | LazyBear squeeze 4h | 1139 / 0.90 | 519 / 1.06 | 24.0% | 1.07 / 1.05 | −3.9% | −0.09 | 46.4% | IS loses |
+| P4 | Ichimoku daily | 449 / 1.60 | 227 / 1.00 | 11.5% | 0.53 / 1.70 | 5.9% | 0.51 | 18.3% | 2025 −8.0 |
+| P5 | 10-day max/min (Padysak-Vojtko) | 6963 / 0.96 | 2818 / 0.84 | 23.7% | 0.82 / 0.87 | −4.8% | −0.42 | 46.7% | costs eat it |
+| P6 | Volatility breakout k=0.5 (1h) | 3848 / 0.92 | 1795 / 0.86 | 68.9% | 0.83 / 0.93 | −31.5% | −0.79 | 92.2% | fails |
+| P7 | 21-23 UTC seasonality (1h) | 4419 / 0.61 | 2076 / 0.52 | 76.2% | 0.56 / 0.44 | −49.0% | −3.99 | 98.2% | fails |
+| P8 | Turtle system 2 daily | 349 / 1.98 | 158 / 1.02 | 14.6% | 0.91 / 1.10 | 24.0% | 0.74 | 65.0% | 2021 +207%, then flat |
+| P9 | Golden cross daily | 94 / 1.59 | 33 / 1.81 | 7.8% | 1.69 / 2.29 | 1.5% | 0.17 | 34.0% | too few trades |
+| P10 | Connors RSI(2) daily | 1201 / 0.76 | 548 / 0.79 | 11.9% | 0.93 / 0.64 | −5.0% | −0.66 | 33.5% | 60% win, loses |
+| ref | A-LV + time stop | 537 / 1.22 | 321 / 1.20 | 32.9% | 1.46 / 1.00 | 15.8% | 0.72 | 31.8% | |
+
+Findings:
+- Supertrend(10,3) on the daily chart over 20 coins is the one new candidate: profitable in both periods, 6 of 7 years positive (2022 −1.2%), max DD 19.7% at 0.5% risk. Next: robustness and portfolios (round 10).
+- Short-horizon ideas (10-day max/min, volatility breakout, hour-of-day seasonality) have real gross effects in the papers but do not survive 0.1% per side costs on futures; Connors RSI(2) wins 60% of trades and still loses (the same high-win-rate trap as the old TP ladder).
+- MACD and squeeze look fine after 2025 but lose before it: no stable edge.
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
