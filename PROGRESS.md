@@ -194,6 +194,16 @@ Findings:
 - Stepped stops (the user's "move the stop as price approaches the target") also lower OOS PF to 0.97 and Sharpe to 0.43/0.27; the tighter, the worse. The 3-ATR trailing stop already follows price; a tighter R-based step adds stop-outs on normal pullbacks inside trends.
 - Across rounds 2, 4 and 5, every exit that takes profit earlier than the 3-ATR trail hurts A; only the loser time stop is neutral-to-positive.
 
+### 2026-11-18 — Round 6: same-side cap (max 2) + re-entry cooldown (3 candles after a stop)
+
+| | IS PF | IS DD | OOS trades | OOS PF | OOS E | OOS DD | 2025 PF | 2026 PF | Full CAGR | Full Sharpe | Full DD |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A baseline | 1.25 | — | — | 1.12 | — | 34.8% | — | — | — | ~0.74 | — |
+| A + cap + cooldown | 1.23 | 21.6% | 262 | 1.04 | 0.06R | 28.6% | 1.31 | 0.82 | 9.6% | 0.54 | 27.5% |
+| A+timestop + cap + cooldown | 1.18 | 18.5% | 273 | 1.09 | 0.08R | 27.6% | 1.35 | 0.87 | 9.1% | 0.52 | 26.4% |
+
+Findings: the portfolio rules cut drawdown by ~7 points (fewer correlated positions), but return falls more than risk, so Sharpe drops. They are a risk-budget choice, not an edge. 2026 remains the losing year in every variant; the next step is to find out why (loss attribution, `--analyze`).
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
