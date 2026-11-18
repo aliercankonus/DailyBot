@@ -2,6 +2,7 @@
 //   [--symbols ...] [--risk 0.01] [--max-open 3] [--from ...] [--to ...] [--robustness]
 //   [--dd-scale] [--loss-streak]   (risk modifiers, single-symbol strategies only)
 //   [--max-same-dir 2] [--cooldown 3]   (portfolio rules: same-side cap, re-entry bars after a stop)
+//   [--brief]   (two-line summary per strategy, for screening; skips the detailed report)
 //   [--analyze]   (loss attribution over all data: exit, side, hold time, MFE, regime, worst months)
 // Defaults for symbols, risk and max-open come from the strategy (src/backtest/catalog.ts).
 //
@@ -94,8 +95,20 @@ console.log(`strategy ${entry.label}: ${entry.describe(DEFAULTS)}  interval ${in
 console.log(`costs: taker ${cfg.takerFee * 100}%/side, slippage ${cfg.slippage * 100}%/fill, funding ${cfg.fundingRates ? `historical (${Object.keys(cfg.fundingRates).length} symbols)` : `${cfg.fundingPer8h * 100}%/8h flat`}  risk ${cfg.riskPerTrade * 100}%/trade, max ${cfg.maxOpenPositions} open${cfg.riskModifiers?.ddScale ? ", dd-scale" : ""}${cfg.riskModifiers?.lossStreak ? ", loss-streak" : ""}${cfg.maxSameDirection !== undefined ? `, max ${cfg.maxSameDirection} same side` : ""}${cfg.reentryCooldownBars ? `, cooldown ${cfg.reentryCooldownBars} bars` : ""}\n`);
 
 const ins = run(DEFAULTS, 0, split);
-console.log(`== IN-SAMPLE (before ${new Date(split).toISOString().slice(0, 10)}) ==\n${isWeights ? formatEquity(ins.eq) : formatMetrics(ins.m)}\n`);
 const oos = run(DEFAULTS, split, Infinity);
+if (a.brief) {
+  // One compact block per strategy, for screening many strategies in one research run.
+  const full = run(DEFAULTS, 0, Infinity);
+  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  const verdict = isWeights ? equityAcceptance(oos.eq) : acceptance(oos.m);
+  const years = isWeights ? [] : yearlyConsistency(oos.res.trades);
+  for (const y of years) if (!(y.profitFactor > 1)) verdict.pass = false;
+  const side = (m: typeof ins.m) => isWeights ? "" : `n ${m.trades} win ${pct(m.winRate)} PF ${formatProfitFactor(m.profitFactor)} E ${m.expectancyR.toFixed(2)}R DD ${pct(m.maxDrawdownPct)}`;
+  console.log(`BRIEF ${entry.label} | IS ${side(ins.m)} Sharpe ${ins.eq.sharpe.toFixed(2)} | OOS ${side(oos.m)} Sharpe ${oos.eq.sharpe.toFixed(2)}${years.map((y) => ` | ${y.year} PF ${formatProfitFactor(y.profitFactor)}`).join("")}`);
+  console.log(`  full CAGR ${pct(full.eq.cagr)} Sharpe ${full.eq.sharpe.toFixed(2)} DD ${pct(full.eq.maxDrawdownPct)} | ${full.eq.yearly.map((y) => `${y.year} ${y.ret >= 0 ? "+" : ""}${(y.ret * 100).toFixed(1)}`).join(" ")} | ${verdict.pass ? "PASS" : "FAIL"}`);
+  process.exitCode = verdict.pass ? 0 : 2;
+} else {
+console.log(`== IN-SAMPLE (before ${new Date(split).toISOString().slice(0, 10)}) ==\n${isWeights ? formatEquity(ins.eq) : formatMetrics(ins.m)}\n`);
 console.log(`== OUT-OF-SAMPLE (from ${new Date(split).toISOString().slice(0, 10)}) ==\n${isWeights ? formatEquity(oos.eq) : formatMetrics(oos.m)}\n`);
 
 console.log("per symbol (out-of-sample):");
@@ -148,3 +161,4 @@ if (a.robustness) {
   }
 }
 process.exitCode = verdict.pass ? 0 : 2;
+}

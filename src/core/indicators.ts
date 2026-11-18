@@ -177,3 +177,85 @@ export function aggregate(candles: Candle[], sourceMs: number, targetMs: number)
   }
   return out;
 }
+
+/**
+ * Supertrend (ATR `period`, multiplier `mult`, Wilder ATR on hl2 bands, TradingView rules).
+ * dir[i] = 1 (up, line below price) or -1 (down, line above price); NaN before warm-up.
+ */
+export function supertrend(candles: Candle[], period: number, mult: number): { line: number[]; dir: number[] } {
+  const a = atr(candles, period);
+  const n = candles.length;
+  const line = new Array<number>(n).fill(NaN);
+  const dir = new Array<number>(n).fill(NaN);
+  let up = NaN, dn = NaN, d = 1;
+  for (let i = 0; i < n; i++) {
+    if (!Number.isFinite(a[i]!)) continue;
+    const c = candles[i]!;
+    const hl2 = (c.high + c.low) / 2;
+    const basicUp = hl2 - mult * a[i]!;
+    const basicDn = hl2 + mult * a[i]!;
+    const pc = i > 0 ? candles[i - 1]!.close : c.close;
+    if (!Number.isFinite(up)) {
+      up = basicUp;
+      dn = basicDn;
+    } else {
+      up = basicUp > up || pc < up ? basicUp : up;
+      dn = basicDn < dn || pc > dn ? basicDn : dn;
+    }
+    if (d === -1 && c.close > dn) d = 1;
+    else if (d === 1 && c.close < up) d = -1;
+    dir[i] = d;
+    line[i] = d === 1 ? up : dn;
+  }
+  return { line, dir };
+}
+
+/** MACD line (EMA fast - EMA slow) and its EMA signal line. */
+export function macd(values: number[], fast = 12, slow = 26, signal = 9): { macd: number[]; signal: number[] } {
+  const f = ema(values, fast);
+  const s = ema(values, slow);
+  const m = values.map((_, i) => f[i]! - s[i]!);
+  const first = m.findIndex(Number.isFinite);
+  const sig = new Array<number>(values.length).fill(NaN);
+  if (first >= 0) {
+    const tail = ema(m.slice(first), signal);
+    for (let i = 0; i < tail.length; i++) sig[first + i] = tail[i]!;
+  }
+  return { macd: m, signal: sig };
+}
+
+/** Value at the last point of a least-squares line through values[i-length+1..i]. */
+export function linreg(values: number[], length: number): number[] {
+  const out = new Array<number>(values.length).fill(NaN);
+  for (let i = length - 1; i < values.length; i++) {
+    let sx = 0, sy = 0, sxy = 0, sxx = 0, ok = true;
+    for (let k = 0; k < length; k++) {
+      const y = values[i - length + 1 + k]!;
+      if (!Number.isFinite(y)) { ok = false; break; }
+      sx += k; sy += y; sxy += k * y; sxx += k * k;
+    }
+    if (!ok) continue;
+    const slope = (length * sxy - sx * sy) / (length * sxx - sx * sx);
+    const icpt = (sy - slope * sx) / length;
+    out[i] = icpt + slope * (length - 1);
+  }
+  return out;
+}
+
+/** Highest high / lowest low of the `period` candles ending at i (includes candle i). */
+export function highestHigh(candles: Candle[], period: number): number[] {
+  return candles.map((_, i) => {
+    if (i < period - 1) return NaN;
+    let m = -Infinity;
+    for (let j = i - period + 1; j <= i; j++) m = Math.max(m, candles[j]!.high);
+    return m;
+  });
+}
+export function lowestLow(candles: Candle[], period: number): number[] {
+  return candles.map((_, i) => {
+    if (i < period - 1) return NaN;
+    let m = Infinity;
+    for (let j = i - period + 1; j <= i; j++) m = Math.min(m, candles[j]!.low);
+    return m;
+  });
+}

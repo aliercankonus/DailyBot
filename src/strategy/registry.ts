@@ -7,6 +7,10 @@ import { createTsmom, DEFAULT_TSMOM } from "./tsmom.js";
 import type { Strategy } from "./types.js";
 import { EXIT_PRESETS, withExits } from "./exitOverlays.js";
 import {
+  createConnorsRsi2, createGoldenCross, createIchimoku, createMacd200, createMaxMin10, createNightSeason,
+  createSqueezeLazyBear, createSupertrend, createTurtle55, createVolBreakout,
+} from "./popular.js";
+import {
   createCapitulation, createDailyPullback, createFailedBreakout, createSqueezeBreakout,
   DEFAULT_CAPITULATION, DEFAULT_DAILY_PULLBACK, DEFAULT_FAILED_BREAKOUT, DEFAULT_SQUEEZE,
 } from "./oldIdeas.js";
@@ -95,6 +99,18 @@ export const STRATEGIES = {
     integerKeys: new Set(["emaFast", "emaSlow", "maxBars"]),
     create: (p) => createDailyPullback({ ...DEFAULT_DAILY_PULLBACK, ...p }),
   },
+  // Round 9: the most recommended public strategies, at their published settings (src/strategy/popular.ts).
+  st4h: { label: "P1-4h", interval: "4h", defaults: {}, integerKeys: new Set<string>(), create: () => createSupertrend("4h") },
+  st1d: { label: "P1-1d", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createSupertrend("1d") },
+  macd: { label: "P2", interval: "4h", defaults: {}, integerKeys: new Set<string>(), create: () => createMacd200() },
+  sqzlb: { label: "P3", interval: "4h", defaults: {}, integerKeys: new Set<string>(), create: () => createSqueezeLazyBear() },
+  ichi: { label: "P4", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createIchimoku() },
+  maxmin: { label: "P5", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createMaxMin10() },
+  volbo: { label: "P6", interval: "1h", defaults: {}, integerKeys: new Set<string>(), create: () => createVolBreakout() },
+  night: { label: "P7", interval: "1h", defaults: {}, integerKeys: new Set<string>(), create: () => createNightSeason() },
+  turtle: { label: "P8", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createTurtle55() },
+  gcross: { label: "P9", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createGoldenCross() },
+  rsi2: { label: "P10", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createConnorsRsi2() },
 } satisfies Record<string, StrategyEntry>;
 
 export type StrategyName = keyof typeof STRATEGIES;
