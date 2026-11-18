@@ -56,3 +56,11 @@ CREATE TABLE IF NOT EXISTS bot_state (
   key    TEXT PRIMARY KEY,
   value  JSONB NOT NULL
 );
+
+-- Engines that trade a real exchange (testnet/live) register a fingerprint of their API key here
+-- (in the main database), so two engines can never share one Binance account by mistake.
+CREATE TABLE IF NOT EXISTS engine_accounts (
+  fingerprint    TEXT PRIMARY KEY,
+  bot_name       TEXT NOT NULL,
+  registered_at  BIGINT NOT NULL
+);

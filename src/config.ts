@@ -24,6 +24,8 @@ const Env = z.object({
   STRATEGY: z.string().regex(/^[a-z0-9+]+$/, "STRATEGY must be a strategy name").default("trend"),
   /** Shown in notifications so several engines can share one Telegram chat. */
   BOT_NAME: z.string().max(32).optional(),
+  /** Main database holding engine_accounts; testnet/live engines register their API key there. */
+  REGISTRY_DATABASE_URL: z.string().optional(),
   RISK_PER_TRADE: pct.max(0.02, "risk per trade above 2% is refused").default(0.005),
   MAX_LEVERAGE: z.coerce.number().int().min(1).max(5).default(3),
   MAX_OPEN_POSITIONS: z.coerce.number().int().min(1).max(10).default(3),
@@ -61,6 +63,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, role: ConfigRol
     }
     if (e.MODE !== "paper" && (!e.BINANCE_API_KEY || !e.BINANCE_API_SECRET)) {
       throw new Error(`MODE=${e.MODE} requires BINANCE_API_KEY and BINANCE_API_SECRET`);
+    }
+    if (e.MODE !== "paper" && e.REGISTRY_DATABASE_URL && !e.BOT_NAME) {
+      throw new Error(`MODE=${e.MODE} with REGISTRY_DATABASE_URL requires BOT_NAME (the account registry is keyed by it)`);
     }
   }
   if (role === "api" && !e.API_TOKEN) throw new Error("API_TOKEN is required for the API process");

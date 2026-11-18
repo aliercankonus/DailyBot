@@ -201,6 +201,46 @@ describe("weights engine", () => {
     expect(await repo.getState("lastRebalance")).toBe(T0 + (N - 1) * D);
   });
 
+  it("a partial fill keeps the day open and the remainder is bought on the next tick", async () => {
+    const { ex, repo, engine } = setup({ [N - 1]: { BTCUSDT: 0.5 } });
+    const orig = ex.marketOrder.bind(ex);
+    let partial = true;
+    ex.marketOrder = async (p) => {
+      if (!partial) return orig(p);
+      partial = false;
+      const f = await orig({ ...p, quantity: Math.floor(p.quantity / 2 * 1000) / 1000 });
+      return { ...f, clientOrderId: p.clientOrderId };
+    };
+    await engine.tick();
+    expect(repo.events.some((e) => e.kind === "PARTIAL_FILL")).toBe(true);
+    expect(await repo.getState("lastRebalance")).toBeNull();
+    const half = (await pos(ex, "BTCUSDT"))!.quantity;
+    await engine.tick();
+    expect((await pos(ex, "BTCUSDT"))!.quantity).toBeGreaterThan(half * 1.9);
+    expect(await repo.getState("lastRebalance")).toBe(T0 + (N - 1) * D);
+  });
+
+  it("max drawdown turns the kill switch on and flattens", async () => {
+    const { ex, repo, engine } = setup({ [N - 1]: { BTCUSDT: 0.5, ETHUSDT: -0.3 } });
+    await engine.tick();
+    await repo.setState("equityPeak", 100_000); // equity ~10k is a 90% drawdown from this peak
+    await engine.tick(); // trips the kill switch
+    await engine.tick(); // kill switch on: flatten
+    expect((await repo.getState<{ on: boolean }>("killSwitch"))?.on).toBe(true);
+    expect(await pos(ex, "BTCUSDT")).toBeNull();
+    expect(await pos(ex, "ETHUSDT")).toBeNull();
+  });
+
+  it("a market close that fails turns the kill switch on", async () => {
+    const { ex, repo, engine, mark, data } = setup({ [N - 1]: { BTCUSDT: 0.5 } });
+    await engine.tick();
+    for (const s of await ex.getOpenStops("BTCUSDT")) await ex.cancelStop("BTCUSDT", s.id);
+    mark.BTCUSDT = data.BTCUSDT![N - 1]!.close * 0.5; // stop cannot be placed (even re-based on the 1d close used as "latest")
+    ex.marketOrder = async (p) => ({ orderId: "r", clientOrderId: p.clientOrderId, status: "REJECTED", executedQty: 0, avgPrice: 0 });
+    await engine.ensureStops();
+    expect((await repo.getState<{ on: boolean; reason: string }>("killSwitch"))?.reason).toMatch(/market close failed/);
+  });
+
   it("closes at market when the stop cannot be placed", async () => {
     const { ex, repo, engine, mark, data } = setup({ [N - 1]: { BTCUSDT: 0.5 } });
     await engine.tick();

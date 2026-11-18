@@ -9,6 +9,7 @@ import { getStrategy } from "../strategy/registry.js";
 import { DEFAULT_WEIGHTS_ENGINE, WeightsEngine } from "../engine/weightsEngine.js";
 import { isWeightStrategy, validateEngineStrategy, WEIGHT_STRATEGIES } from "../strategy/weightRegistry.js";
 import { makeExchange, makeNotifier, makePool } from "./runtime.js";
+import { registerEngineAccount } from "../db/accountRegistry.js";
 
 const ENGINE_LOCK_ID = 727_001;
 /** mtime is checked by the compose healthcheck (stale after 5 minutes). */
@@ -36,6 +37,19 @@ try {
   console.error(JSON.stringify({ level: "fatal", msg: "invalid STRATEGY configuration", error: e instanceof Error ? e.message : String(e), time: new Date().toISOString() }));
   await new Promise((r) => setTimeout(r, 30_000));
   process.exit(1);
+}
+// A real exchange account may be traded by one engine only (see src/db/accountRegistry.ts).
+if (cfg.MODE !== "paper" && cfg.REGISTRY_DATABASE_URL) {
+  const reg = makePool({ DATABASE_URL: cfg.REGISTRY_DATABASE_URL });
+  try {
+    await registerEngineAccount(reg, cfg.BINANCE_API_KEY, cfg.BOT_NAME!);
+  } catch (e) {
+    console.error(JSON.stringify({ level: "fatal", msg: "account registry check failed", error: e instanceof Error ? e.message : String(e), time: new Date().toISOString() }));
+    await new Promise((r) => setTimeout(r, 30_000));
+    process.exit(1);
+  } finally {
+    await reg.end().catch(() => {});
+  }
 }
 const baseNotifier = makeNotifier(cfg);
 const notifier = cfg.BOT_NAME ? { send: (level: Parameters<typeof baseNotifier.send>[0], text: string) => baseNotifier.send(level, `[${cfg.BOT_NAME}] ${text}`) } : baseNotifier;

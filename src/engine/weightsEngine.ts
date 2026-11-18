@@ -198,6 +198,12 @@ export class WeightsEngine {
         await this.event("warn", "ORDER_REJECTED", symbol, `${side} ${qty} (${id}) rejected`);
         return "failed";
       }
+      if (fill.executedQty < qty - 1e-12) {
+        // Partially filled: the day stays open and the remainder is retried with a new client id
+        // (the quantity tag differs), computed from the position actually held.
+        await this.event("warn", "PARTIAL_FILL", symbol, `${side} ${fill.executedQty} of ${qty} (${id})`);
+        return "failed";
+      }
       return "filled";
     } catch (e) {
       await this.event("error", "ORDER_FAILED", symbol, `${side} ${rawQty} failed: ${errMsg(e)}`);
