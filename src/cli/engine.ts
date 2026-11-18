@@ -6,6 +6,8 @@ import { PgRepo } from "../db/pgRepo.js";
 import { Engine } from "../engine/engine.js";
 import { INTERVAL_MS } from "../config.js";
 import { getStrategy } from "../strategy/registry.js";
+import { DEFAULT_WEIGHTS_ENGINE, WeightsEngine } from "../engine/weightsEngine.js";
+import { isWeightStrategy, WEIGHT_STRATEGIES } from "../strategy/weightRegistry.js";
 import { makeExchange, makeNotifier, makePool } from "./runtime.js";
 
 const ENGINE_LOCK_ID = 727_001;
@@ -26,7 +28,8 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 }
 
 const cfg = loadConfig(process.env, "engine");
-const notifier = makeNotifier(cfg);
+const baseNotifier = makeNotifier(cfg);
+const notifier = cfg.BOT_NAME ? { send: (level: Parameters<typeof baseNotifier.send>[0], text: string) => baseNotifier.send(level, `[${cfg.BOT_NAME}] ${text}`) } : baseNotifier;
 const pool = makePool(cfg);
 const lockClient = await pool.connect();
 // If the session holding the advisory lock dies, the lock is gone: another engine may start.
@@ -76,7 +79,7 @@ async function shutdown(sig: string) {
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
 
-async function tick(engine: Engine) {
+async function tick(engine: { tick(): Promise<void> }) {
   if (running || stopping) return;
   running = true;
   const t0 = Date.now();
@@ -113,6 +116,17 @@ try {
   const repo = new PgRepo(pool);
   const ex = await makeExchange(cfg, repo);
   persist = ex.persist;
+  if (isWeightStrategy(cfg.STRATEGY)) {
+    // Weight strategy (e.g. G-LS): daily rebalance to target weights, catastrophic stop per position.
+    const strategy = WEIGHT_STRATEGIES[cfg.STRATEGY]!();
+    const engine = new WeightsEngine({
+      exchange: ex.exchange, repo, notifier, strategy,
+      cfg: { ...DEFAULT_WEIGHTS_ENGINE, symbols: cfg.symbols, maxLeverage: cfg.MAX_LEVERAGE, maxDrawdown: cfg.MAX_DRAWDOWN },
+    });
+    await notifier.send("info", `Engine started: mode=${cfg.MODE} strategy=${strategy.name} symbols=${cfg.symbols.length} (daily rebalance)`);
+    await tick(engine);
+    if (!stopping) interval = setInterval(() => void tick(engine), cfg.TICK_SECONDS * 1000);
+  } else {
   // The strategy decides its own candle interval, so live always matches what was backtested.
   const strategy = getStrategy(cfg.STRATEGY).create();
   const intervalMs = INTERVAL_MS[strategy.interval];
@@ -133,6 +147,7 @@ try {
   await notifier.send("info", `Engine started: mode=${cfg.MODE} strategy=${strategy.name} symbols=${cfg.symbols.join(",")} interval=${strategy.interval} risk=${cfg.RISK_PER_TRADE * 100}%`);
   await tick(engine);
   if (!stopping) interval = setInterval(() => void tick(engine), cfg.TICK_SECONDS * 1000);
+  }
 } catch (e) {
   // Delay before exiting so `restart: unless-stopped` does not turn this into a tight crash loop.
   log("fatal", "engine startup failed", { error: errMsg(e) });

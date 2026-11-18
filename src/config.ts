@@ -16,8 +16,14 @@ const Env = z.object({
   BINANCE_STOP_API: z.enum(["algo", "legacy", "auto"]).default("auto"),
   SYMBOLS: z.string().default("BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT"),
   INTERVAL: z.string().refine((v) => Object.hasOwn(INTERVAL_MS, v), "unsupported interval").default("4h"),
-  /** Which strategy the engine trades (see src/strategy/registry.ts). Its interval overrides INTERVAL. */
-  STRATEGY: z.enum(["trend", "pullback", "meanrev", "funding", "tsmom"]).default("trend"),
+  /**
+   * Which strategy the engine trades: a trades strategy from src/strategy/registry.ts (presets
+   * allowed, e.g. "trendlv+timestop"; its interval overrides INTERVAL) or a weight strategy from
+   * src/strategy/weightRegistry.ts (e.g. "donchianls"). Validated when the engine starts.
+   */
+  STRATEGY: z.string().regex(/^[a-z0-9+]+$/, "STRATEGY must be a strategy name").default("trend"),
+  /** Shown in notifications so several engines can share one Telegram chat. */
+  BOT_NAME: z.string().max(32).optional(),
   RISK_PER_TRADE: pct.max(0.02, "risk per trade above 2% is refused").default(0.005),
   MAX_LEVERAGE: z.coerce.number().int().min(1).max(5).default(3),
   MAX_OPEN_POSITIONS: z.coerce.number().int().min(1).max(10).default(3),

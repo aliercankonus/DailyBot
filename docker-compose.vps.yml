@@ -20,6 +20,24 @@ x-node: &node
     options: { max-size: "10m", max-file: "3" }
 
 x-db-url: &dburl postgres://trader:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/trader
+x-db-url-st: &dburl_st postgres://trader:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/trader_st
+x-db-url-gls: &dburl_gls postgres://trader:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/trader_gls
+
+x-engine-common: &engine_common
+  command: ["node", "dist/cli/engine.js"]
+  depends_on:
+    migrate: { condition: service_completed_successfully }
+  mem_limit: 384m
+  restart: unless-stopped
+  # The engine's own shutdown deadline is 45s; this leaves room for it to persist and exit.
+  stop_grace_period: 60s
+  healthcheck:
+    # Unhealthy when no tick has succeeded for 5 minutes (the engine touches this file after each one).
+    test: ["CMD", "node", "-e", "const s=require('fs').statSync('/tmp/engine-heartbeat');process.exit(Date.now()-s.mtimeMs<300000?0:1)"]
+    interval: 60s
+    timeout: 10s
+    retries: 2
+    start_period: 3m
 
 services:
   db:
@@ -43,14 +61,24 @@ services:
     environment:
       MODE: ${MODE:-paper}
       DATABASE_URL: *dburl
+      # One database per engine instance (see below).
+      EXTRA_DATABASES: trader_st,trader_gls
     depends_on:
       db: { condition: service_healthy }
     restart: "no"
 
+  # Three engines, one per strategy of the recommended portfolio (PROGRESS.md round 10). Each has
+  # its own database: own positions, paper account, kill switch and equity curve. For testnet/live
+  # each needs its OWN Binance (sub-)account and keys, because two engines trading the same symbol
+  # on one account would net their positions; that is why the extra engines have separate
+  # *_MODE and key variables. MAX_DRAWDOWN is a kill switch for "something is broken", set above
+  # each strategy's backtest drawdown (A 31.8%, ST 19.7%, G-LS 32.6%).
+
+  # A-LV + time stop: 4h breakout on 5 coins.
   engine:
-    <<: *node
-    command: ["node", "dist/cli/engine.js"]
+    <<: [*node, *engine_common]
     environment:
+      BOT_NAME: A
       MODE: ${MODE:-paper}
       CONFIRM_LIVE: ${CONFIRM_LIVE:-}
       BINANCE_API_KEY: ${BINANCE_API_KEY:-}
@@ -58,12 +86,12 @@ services:
       BINANCE_BASE_URL: ${BINANCE_BASE_URL:-}
       BINANCE_STOP_API: ${BINANCE_STOP_API:-auto}
       SYMBOLS: ${SYMBOLS:-BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT}
-      STRATEGY: ${STRATEGY:-trend}
+      STRATEGY: ${STRATEGY:-trendlv+timestop}
       RISK_PER_TRADE: ${RISK_PER_TRADE:-0.005}
       MAX_LEVERAGE: ${MAX_LEVERAGE:-3}
       MAX_OPEN_POSITIONS: ${MAX_OPEN_POSITIONS:-3}
       DAILY_LOSS_LIMIT: ${DAILY_LOSS_LIMIT:-0.03}
-      MAX_DRAWDOWN: ${MAX_DRAWDOWN:-0.15}
+      MAX_DRAWDOWN: ${MAX_DRAWDOWN:-0.35}
       PAPER_START_BALANCE: ${PAPER_START_BALANCE:-10000}
       TAKER_FEE: ${TAKER_FEE:-0.0005}
       SLIPPAGE: ${SLIPPAGE:-0.0005}
@@ -71,19 +99,55 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       DATABASE_URL: *dburl
-    depends_on:
-      migrate: { condition: service_completed_successfully }
-    mem_limit: 384m
-    restart: unless-stopped
-    # The engine's own shutdown deadline is 45s; this leaves room for it to persist and exit.
-    stop_grace_period: 60s
-    healthcheck:
-      # Unhealthy when no tick has succeeded for 5 minutes (the engine touches this file after each one).
-      test: ["CMD", "node", "-e", "const s=require('fs').statSync('/tmp/engine-heartbeat');process.exit(Date.now()-s.mtimeMs<300000?0:1)"]
-      interval: 60s
-      timeout: 10s
-      retries: 2
-      start_period: 3m
+
+  # Supertrend(10,3) daily on 20 coins.
+  engine-st:
+    <<: [*node, *engine_common]
+    environment:
+      BOT_NAME: ST
+      MODE: ${ST_MODE:-paper}
+      CONFIRM_LIVE: ${ST_CONFIRM_LIVE:-}
+      BINANCE_API_KEY: ${ST_BINANCE_API_KEY:-}
+      BINANCE_API_SECRET: ${ST_BINANCE_API_SECRET:-}
+      BINANCE_BASE_URL: ${BINANCE_BASE_URL:-}
+      BINANCE_STOP_API: ${BINANCE_STOP_API:-auto}
+      SYMBOLS: ${UNIVERSE_20:-BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,DOGEUSDT,AVAXUSDT,LINKUSDT,DOTUSDT,LTCUSDT,BCHUSDT,TRXUSDT,ATOMUSDT,ETCUSDT,XLMUSDT,FILUSDT,UNIUSDT,NEARUSDT,AAVEUSDT}
+      STRATEGY: st1d
+      RISK_PER_TRADE: ${ST_RISK_PER_TRADE:-0.005}
+      MAX_LEVERAGE: ${MAX_LEVERAGE:-3}
+      MAX_OPEN_POSITIONS: 10
+      DAILY_LOSS_LIMIT: ${DAILY_LOSS_LIMIT:-0.03}
+      MAX_DRAWDOWN: ${ST_MAX_DRAWDOWN:-0.25}
+      PAPER_START_BALANCE: ${PAPER_START_BALANCE:-10000}
+      TAKER_FEE: ${TAKER_FEE:-0.0005}
+      SLIPPAGE: ${SLIPPAGE:-0.0005}
+      TICK_SECONDS: ${TICK_SECONDS:-60}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DATABASE_URL: *dburl_st
+
+  # G-LS: daily Donchian ensemble, long/short, volatility targeted, rebalanced after each daily close.
+  engine-gls:
+    <<: [*node, *engine_common]
+    environment:
+      BOT_NAME: GLS
+      MODE: ${GLS_MODE:-paper}
+      CONFIRM_LIVE: ${GLS_CONFIRM_LIVE:-}
+      BINANCE_API_KEY: ${GLS_BINANCE_API_KEY:-}
+      BINANCE_API_SECRET: ${GLS_BINANCE_API_SECRET:-}
+      BINANCE_BASE_URL: ${BINANCE_BASE_URL:-}
+      BINANCE_STOP_API: ${BINANCE_STOP_API:-auto}
+      SYMBOLS: ${UNIVERSE_20:-BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,DOGEUSDT,AVAXUSDT,LINKUSDT,DOTUSDT,LTCUSDT,BCHUSDT,TRXUSDT,ATOMUSDT,ETCUSDT,XLMUSDT,FILUSDT,UNIUSDT,NEARUSDT,AAVEUSDT}
+      STRATEGY: donchianls
+      MAX_LEVERAGE: ${MAX_LEVERAGE:-3}
+      MAX_DRAWDOWN: ${GLS_MAX_DRAWDOWN:-0.40}
+      PAPER_START_BALANCE: ${PAPER_START_BALANCE:-10000}
+      TAKER_FEE: ${TAKER_FEE:-0.0005}
+      SLIPPAGE: ${SLIPPAGE:-0.0005}
+      TICK_SECONDS: ${TICK_SECONDS:-60}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DATABASE_URL: *dburl_gls
 
   api:
     <<: *node
