@@ -43,31 +43,35 @@ CONSTRAINTS (verbatim): Binance USDⓈ-M futures, long + short ("Futures long + 
 - `src/engine/engine.ts` — live engine supports trades strategies only; NO weight-strategy (G-LS) support yet.
 
 ## Current state
-- 2026-11-18 23:12 UTC: PHASE 1 DEPLOYED. Three paper engines run on the VPS (engine A-LV+timestop / engine-st st1d / engine-gls donchianls), each with its own DB (trader / trader_st / trader_gls) and API (8081/8082/8083). Next check: G-LS first rebalance after 00:00 UTC (events table in trader_gls: REBALANCE). Deferred before testnet/live: see PROGRESS.md Deployment.
-- Works: 247 tests (241 pass + 6 Postgres skipped without TEST_DATABASE_URL). VPS 1955523 project `dailybot`, MODE=paper, engine still runs plain `trend` (A) at 0.5% risk; API 127.0.0.1:8081 (8080 = signal-desk). Research container exited after round 8 (RESEARCH=1 still set in the project env; set RESEARCH=0 on the next deploy).
-- Deploy: Hostinger MCP `vps_docker_create` {virtualMachineId 1955523, project_name "dailybot", content = full docker-compose.vps.yml text, environment = POSTGRES_PASSWORD + API_TOKEN (in the hPanel project env and the session scratchpad `vps-secrets.env` — REDACTED here; if the scratchpad is gone, ask the user or read them from hPanel, never commit them) + MODE=paper + RESEARCH… lines}. Logs: `vps_docker_logs` {virtualMachineId 1955523, projectName "dailybot"}, ~300 lines/service (≈2 strategies + 3 portfolios per run).
-- Local Postgres for tests: `su postgres -c "$PGB/pg_ctl -D /var/tmp/te-pg/data -o '-p 55432 -k /var/tmp/te-pg -c listen_addresses=localhost' -l /var/tmp/te-pg/log start"`, then `TEST_DATABASE_URL=postgres://trader@localhost:55432/trader npm test` (recreate if the container is fresh).
-- Gotchas: the safety check false-positives on heredocs/python with `$$` — write edit scripts to the scratchpad with Write (build `$$` as `'$' * 2`) or use Edit. `git commit -F -` heredocs without `$$` are fine.
+- 2026-11-18 23:12 UTC: PHASE 1 DONE AND DEPLOYED (image 1b510ff). Three paper engines on VPS 1955523, project `dailybot`, each with its own DB and 10,000 USDT paper account: `engine` (A-LV + time stop, 4h, 5 coins, db trader, API 127.0.0.1:8081), `engine-st` (st1d Supertrend daily, 20 coins, db trader_st, API 8082), `engine-gls` (donchianls G-LS, daily rebalance after 00:00 UTC, db trader_gls, API 8083). Kill-switch drawdowns 35% / 25% / 40% (A_/ST_/GLS_MAX_DRAWDOWN). All containers healthy at deploy. A scheduled check in the OLD session at 2026-11-19 00:40 UTC looks at the first G-LS rebalance; a new session should verify it again from the logs (engine-gls ticks around 00:00-00:30 UTC, "Rebalance" notification lines, no tick failures).
+- Code review: /e2e-code-review on 79a4a60 gave REQUEST_CHANGES; all must-fix items fixed in 62cc9c7 + 1b510ff and re-verified FIXED. Deferred items (must be closed before ANY testnet/live mode) are listed in PROGRESS.md "Deployment": distinct Binance (sub-)account per engine enforced in code (key fingerprint registry), per-engine BINANCE_BASE_URL, how the 2% per-trade rule applies to weight legs, partial-fill retry, MAX_DRAWDOWN-trip and failed-close tests.
+- Tests: 273 (267 pass + 6 Postgres skipped without TEST_DATABASE_URL; all 273 pass with local Postgres).
+- Deploy: Hostinger MCP `vps_docker_create` {virtualMachineId 1955523, project_name "dailybot", content = full docker-compose.vps.yml text (comment lines may be stripped), environment = POSTGRES_PASSWORD + API_TOKEN + MODE=paper + RESEARCH=0 (+ RESEARCH_STRATEGIES/RESEARCH_ARGS/RESEARCH_COMBO for a research run)}. IMPORTANT: `environment` replaces the whole project env, so both secrets must be sent every time. They are stored in the Hostinger hPanel project env for `dailybot` and were in the old session's scratchpad (`vps-secrets.env`, gone in a new container). A new session must ask the user for them (never commit, never echo back). Logs: `vps_docker_logs` {virtualMachineId 1955523, projectName "dailybot"} (~300 lines/service); containers: `vps_docker_containers`.
+- Research job: RESEARCH=1 runs `backtest.js` for each RESEARCH_STRATEGIES entry (add `--brief` in RESEARCH_ARGS for 2-line summaries, ~12 strategies per run) and `combo.js` for each RESEARCH_COMBO portfolio. Set RESEARCH=0 afterwards.
+- Local Postgres for tests: `su postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/tmp/te-pg/data -o '-p 55432 -k /var/tmp/te-pg -c listen_addresses=localhost' -l /var/tmp/te-pg/log start"`, then `TEST_DATABASE_URL=postgres://trader@localhost:55432/trader npm test` (recreate if the container is fresh).
+- Gotchas: the safety check false-positives on heredocs/python with `$$` — write edit scripts to the scratchpad with Write (build `$$` as `'$' * 2`) or use Edit. Reading Google Docs links is blocked in this environment (ask the user to paste text).
 - Fails: nothing known.
 
-## Next steps (ordered) — the user asked for the plan; phase 1 is proposed, NOT yet explicitly approved
-1. Phase 1 (1–2 weeks): weight-strategy support in the live engine (daily rebalance of G-LS to target weights via the Exchange interface with deterministic clientIds, an exchange-side catastrophic stop per position, reconcile), switch A to `trendlv+timestop`, run `st1d` (trades strategy, daily, 20 coins) as a second engine instance or multi-strategy engine, split capital in equal thirds (risk 0.5%/trade, leverage ≤3), paper exchange support, tests, `/e2e-code-review` with security reviewer (engine/exchange/risk changes). Confirm with the user before starting if they have not replied "devam"/approved.
-2. Phase 2 (2–3 months): paper vs backtest weekly comparison; Telegram alerts; simple dashboard. Stop rule: DD > 15% or large deviation from backtest expectations.
-3. Phase 3 (parallel): Binance testnet order lifecycle (`BINANCE_STOP_API` auto|algo|legacy); needs testnet keys from the user (request_credential / hPanel env, never chat).
-4. Phase 4: small live capital at 0.5% risk if paper holds up.
-5. Research only on new data or in paper; do not retune frozen parameters. Ideas: A on more coins, portfolio-level vol target.
+## Next steps (ordered)
+1. Verify the first G-LS rebalance and the first Supertrend daily candle (logs). Fix anything broken.
+2. Phase 2, paper period (2-3 months, parameters frozen): build a paper-vs-backtest report (per engine: trades, win rate, PF, R, equity, drawdown, vs the backtest expectation), run it weekly and as a post-mortem after each engine's 30th paper trade (idea from the user's "Self-Improving AI Trader" guide: one versioned change at a time, validated on later data only). Telegram alerts (needs TELEGRAM_BOT_TOKEN/CHAT_ID from the user, via hPanel env). Simple dashboard reading the three APIs. Stop rule: an engine's drawdown beyond its backtest max or large deviation from expectations → stop and investigate.
+3. Before testnet/live: close the deferred review items (see Current state), then the Binance testnet order lifecycle (`BINANCE_STOP_API` auto|algo|legacy); needs testnet keys per engine/sub-account from the user (request_credential / hPanel env, never chat).
+4. Small live capital at 0.5% risk if paper holds up, one Binance sub-account per engine.
+5. Optional research (on new data only): the user's guide example (BTC 1h MA20/MA50 long-only, 0.15% per switch) was offered as a quick test, not yet run; A and Supertrend on more coins; portfolio-level volatility target.
 
 ## Suggested skills for the next agent
-- `/delegate` for the weight-engine work; `/e2e-code-review` before merge; `/context-handoff` at ~75% context.
+- `/e2e-code-review` before merging anything under src/engine, src/exchange or src/risk (security reviewer mandatory); `/delegate` for larger builds (dashboard, report); `/context-handoff` at ~75% context.
 
 ## Open questions for user
-- Approve phase 1 (weight-strategy engine + 50/50 paper portfolio)?
-- When will testnet API keys be available?
+- Telegram bot token/chat id for alerts? (optional)
+- When will Binance testnet keys (one per engine/sub-account) be available?
 - Capital size for the eventual small live test.
+- Run the guide's MA20/MA50 example test? (offered, no answer yet)
 
 ## Probes
 - What is the recommended portfolio and its backtest numbers? (⅓ st1d + ⅓ trendlv+timestop + ⅓ donchianls; every year positive 2020–26, CAGR 18.5%, Sharpe 1.04, DD 18.6%, from-2025 Sharpe 0.68.)
 - Which popular internet strategies were tested and which survived? (11 in round 9; only Supertrend daily; pairs vs BTC failed in round 10.)
 - Why are TP1/TP2 and stepped stops not used? (Given-back profit is −37R vs +364R from big winners; every early-profit exit lowered OOS PF.)
-- What must be built before the portfolio can run in paper? (Weight-strategy support in the live engine: daily rebalance + exchange-side catastrophic stops; switch A to trendlv+timestop.)
+- What is running on the VPS and where are the secrets needed to redeploy? (Three paper engines A/ST/GLS with own DBs and APIs 8081-8083; POSTGRES_PASSWORD and API_TOKEN are in the hPanel project env — ask the user, they are not in the repo.)
+- What must be done before testnet/live? (The deferred review items in PROGRESS.md Deployment, then testnet validation with one sub-account per engine.)
 - Can parameters still be tuned on 2020–2026 data? (No, frozen; paper is the only valid test.)
