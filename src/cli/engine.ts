@@ -28,8 +28,15 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 }
 
 const cfg = loadConfig(process.env, "engine");
-// Fail fast on a bad STRATEGY, before taking the lock or creating an exchange client.
-validateEngineStrategy(cfg.STRATEGY, cfg.MAX_LEVERAGE, (n) => getStrategy(n));
+// Fail fast on a bad STRATEGY, before taking the lock or creating an exchange client. Wait before
+// exiting so `restart: unless-stopped` does not turn a config error into a tight crash loop.
+try {
+  validateEngineStrategy(cfg.STRATEGY, cfg.MAX_LEVERAGE, (n) => getStrategy(n));
+} catch (e) {
+  console.error(JSON.stringify({ level: "fatal", msg: "invalid STRATEGY configuration", error: e instanceof Error ? e.message : String(e), time: new Date().toISOString() }));
+  await new Promise((r) => setTimeout(r, 30_000));
+  process.exit(1);
+}
 const baseNotifier = makeNotifier(cfg);
 const notifier = cfg.BOT_NAME ? { send: (level: Parameters<typeof baseNotifier.send>[0], text: string) => baseNotifier.send(level, `[${cfg.BOT_NAME}] ${text}`) } : baseNotifier;
 const pool = makePool(cfg);
