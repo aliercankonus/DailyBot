@@ -20,6 +20,9 @@ x-node: &node
     driver: json-file
     options: { max-size: "10m", max-file: "3" }
 
+# The 20-coin universe of the daily strategies (and the research downloads).
+x-universe: &universe BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,DOGEUSDT,AVAXUSDT,LINKUSDT,DOTUSDT,LTCUSDT,BCHUSDT,TRXUSDT,ATOMUSDT,ETCUSDT,XLMUSDT,FILUSDT,UNIUSDT,NEARUSDT,AAVEUSDT
+
 x-db-url: &dburl postgres://trader:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/trader
 x-db-url-st: &dburl_st postgres://trader:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/trader_st
 x-db-url-gls: &dburl_gls postgres://trader:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/trader_gls
@@ -39,6 +42,18 @@ x-engine-common: &engine_common
     timeout: 10s
     retries: 2
     start_period: 3m
+
+x-api-common: &api_common
+  command: ["node", "dist/cli/api.js"]
+  depends_on:
+    migrate: { condition: service_completed_successfully }
+  mem_limit: 256m
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+    interval: 30s
+    timeout: 5s
+    retries: 3
 
 services:
   db:
@@ -116,7 +131,7 @@ services:
       BINANCE_API_SECRET: ${ST_BINANCE_API_SECRET:-}
       BINANCE_BASE_URL: ${ST_BINANCE_BASE_URL:-}
       BINANCE_STOP_API: ${BINANCE_STOP_API:-auto}
-      SYMBOLS: ${UNIVERSE_20:-BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,DOGEUSDT,AVAXUSDT,LINKUSDT,DOTUSDT,LTCUSDT,BCHUSDT,TRXUSDT,ATOMUSDT,ETCUSDT,XLMUSDT,FILUSDT,UNIUSDT,NEARUSDT,AAVEUSDT}
+      SYMBOLS: *universe
       STRATEGY: st1d
       RISK_PER_TRADE: ${ST_RISK_PER_TRADE:-0.005}
       MAX_LEVERAGE: ${MAX_LEVERAGE:-3}
@@ -143,7 +158,7 @@ services:
       BINANCE_API_SECRET: ${GLS_BINANCE_API_SECRET:-}
       BINANCE_BASE_URL: ${GLS_BINANCE_BASE_URL:-}
       BINANCE_STOP_API: ${BINANCE_STOP_API:-auto}
-      SYMBOLS: ${UNIVERSE_20:-BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,DOGEUSDT,AVAXUSDT,LINKUSDT,DOTUSDT,LTCUSDT,BCHUSDT,TRXUSDT,ATOMUSDT,ETCUSDT,XLMUSDT,FILUSDT,UNIUSDT,NEARUSDT,AAVEUSDT}
+      SYMBOLS: *universe
       STRATEGY: donchianls
       MAX_LEVERAGE: ${MAX_LEVERAGE:-3}
       MAX_DRAWDOWN: ${GLS_MAX_DRAWDOWN:-0.40}
@@ -156,62 +171,32 @@ services:
       DATABASE_URL: *dburl_gls
 
   api:
-    <<: *node
-    command: ["node", "dist/cli/api.js"]
+    <<: [*node, *api_common]
     environment:
       MODE: ${MODE:-paper}
       API_TOKEN: ${API_TOKEN:?set API_TOKEN}
       DATABASE_URL: *dburl
-    depends_on:
-      migrate: { condition: service_completed_successfully }
     ports:
       - "127.0.0.1:8081:8080"
-    mem_limit: 256m
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
 
   # One API per engine database: status, equity and the kill switch of each engine.
   api-st:
-    <<: *node
-    command: ["node", "dist/cli/api.js"]
+    <<: [*node, *api_common]
     environment:
       MODE: ${MODE:-paper}
       API_TOKEN: ${API_TOKEN:?set API_TOKEN}
       DATABASE_URL: *dburl_st
-    depends_on:
-      migrate: { condition: service_completed_successfully }
     ports:
       - "127.0.0.1:8082:8080"
-    mem_limit: 256m
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
 
   api-gls:
-    <<: *node
-    command: ["node", "dist/cli/api.js"]
+    <<: [*node, *api_common]
     environment:
       MODE: ${MODE:-paper}
       API_TOKEN: ${API_TOKEN:?set API_TOKEN}
       DATABASE_URL: *dburl_gls
-    depends_on:
-      migrate: { condition: service_completed_successfully }
     ports:
       - "127.0.0.1:8083:8080"
-    mem_limit: 256m
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
 
   # Opt-in research job: set RESEARCH=1 in the project environment, then update the project.
   # It downloads 4h/1h candles (5 coins), 1d candles and funding history (20 coins) from 2021,
@@ -226,7 +211,7 @@ services:
       RESEARCH_ARGS: ${RESEARCH_ARGS:-}
       # Space-separated portfolios of comma-separated name:weight legs, e.g. "trend:0.5,donchianls:0.5".
       RESEARCH_COMBO: ${RESEARCH_COMBO:-}
-      RESEARCH_UNIVERSE: ${RESEARCH_UNIVERSE:-BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,DOGEUSDT,AVAXUSDT,LINKUSDT,DOTUSDT,LTCUSDT,BCHUSDT,TRXUSDT,ATOMUSDT,ETCUSDT,XLMUSDT,FILUSDT,UNIUSDT,NEARUSDT,AAVEUSDT}
+      RESEARCH_UNIVERSE: *universe
     command:
       - sh
       - -c
