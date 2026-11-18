@@ -177,7 +177,22 @@ Break-even after TP1 in all; a candle touching stop and TP is a stop-out; TP fil
 Findings:
 - Every ladder makes A worse, and the earlier the TP the worse: the old bot's ladder turns a profitable system into −24%/year with a 64% win rate (avg win 0.45R vs avg loss 0.97R). This is the "high win rate" trap: winners are capped at 2R while losers stay 1R, and a trend system lives on a few large winners.
 - Trade count nearly doubles with tpold (1185 vs 649 for A+be): break-even stops after TP1 end trades early and the strategy re-enters, paying fees again.
-- Caveat: break-even in the TP1 candle is assumed stopped (pessimistic). Sensitivity presets without break-even (`tpoldnb`, `tp1nb`) are queued to check the conclusion does not depend on it.
+- Caveat: break-even in the TP1 candle is assumed stopped (pessimistic). Checked in round 5 below.
+
+### 2026-11-18 — Round 5: stepped stop toward a 2R target, and TP ladders without break-even (image 2e7a586)
+
+| | Rule | IS PF | OOS win | OOS PF | OOS E | OOS DD | 2025 PF | 2026 PF | Full CAGR | Full Sharpe |
+|---|---|---|---|---|---|---|---|---|---|---|
+| A baseline | trailing 3 ATR only | 1.25 | — | 1.12 | — | 34.8% | — | — | — | ~0.74 |
+| A+step | BE at 1R (50% of 2R), +0.5R at 1.5R, +1R at 2R, then 1R behind the peak | 1.16 | 41.9% | 0.97 | 0.00R | 35.0% | 1.19 | 0.73 | 7.5% | 0.43 |
+| A+steptight | same, 0.75R behind the peak | 1.08 | 41.6% | 0.97 | 0.00R | 38.2% | 1.18 | 0.72 | 3.5% | 0.27 |
+| A+tpoldnb | old ladder, no break-even | 1.16 | 52.2% | 0.96 | −0.01R | 29.0% | 1.12 | 0.77 | 6.4% | 0.47 |
+| A+tp1nb | 1R:50%, no break-even | 1.17 | 41.7% | 0.95 | −0.01R | 33.2% | 1.19 | 0.72 | 6.1% | 0.41 |
+
+Findings:
+- The pessimistic break-even rule explained most of tpold's collapse (Sharpe −1.66 → 0.47 without break-even), but even the most favourable ladder is clearly worse than A without TPs (OOS PF 0.96 vs 1.12, Sharpe 0.47 vs 0.74). Conclusion holds: no partial TP for A.
+- Stepped stops (the user's "move the stop as price approaches the target") also lower OOS PF to 0.97 and Sharpe to 0.43/0.27; the tighter, the worse. The 3-ATR trailing stop already follows price; a tighter R-based step adds stop-outs on normal pullbacks inside trends.
+- Across rounds 2, 4 and 5, every exit that takes profit earlier than the 3-ATR trail hurts A; only the loser time stop is neutral-to-positive.
 
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
