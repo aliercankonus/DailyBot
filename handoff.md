@@ -1,4 +1,4 @@
-# Handoff — DailyBot strategy research → paper portfolio — 2026-11-18
+# Handoff — DailyBot paper portfolio (phase 2 deployed) — 2026-11-18
 
 GOAL (verbatim, user messages in order, Turkish):
 - "Simdi bizim agentic pattern adinda bir baslangic repomuz var, onun uzerine insa edelim bu sistemi hatalari duzeltip eksiklikleri giderip sistemi ekleyerek. Cunku lovable da calismayacak artik ve bizim hostinger de vps imiz var onu kullanabiliriz"
@@ -43,30 +43,33 @@ CONSTRAINTS (verbatim): Binance USDⓈ-M futures, long + short ("Futures long + 
 - `src/engine/engine.ts` — live engine supports trades strategies only; NO weight-strategy (G-LS) support yet.
 
 ## Current state
-- 2026-11-18 23:12 UTC: PHASE 1 DONE AND DEPLOYED (image 1b510ff). Three paper engines on VPS 1955523, project `dailybot`, each with its own DB and 10,000 USDT paper account: `engine` (A-LV + time stop, 4h, 5 coins, db trader, API 127.0.0.1:8081), `engine-st` (st1d Supertrend daily, 20 coins, db trader_st, API 8082), `engine-gls` (donchianls G-LS, daily rebalance after 00:00 UTC, db trader_gls, API 8083). Kill-switch drawdowns 35% / 25% / 40% (A_/ST_/GLS_MAX_DRAWDOWN). All containers healthy at deploy. A scheduled check in the OLD session at 2026-11-19 00:40 UTC looks at the first G-LS rebalance; a new session should verify it again from the logs (engine-gls ticks around 00:00-00:30 UTC, "Rebalance" notification lines, no tick failures).
-- Code review: /e2e-code-review on 79a4a60 gave REQUEST_CHANGES; all must-fix items fixed in 62cc9c7 + 1b510ff and re-verified FIXED. Deferred items (must be closed before ANY testnet/live mode) are listed in PROGRESS.md "Deployment": distinct Binance (sub-)account per engine enforced in code (key fingerprint registry), per-engine BINANCE_BASE_URL, how the 2% per-trade rule applies to weight legs, partial-fill retry, MAX_DRAWDOWN-trip and failed-close tests.
-- Tests: 273 (267 pass + 6 Postgres skipped without TEST_DATABASE_URL; all 273 pass with local Postgres).
-- Deploy: Hostinger MCP `vps_docker_create` {virtualMachineId 1955523, project_name "dailybot", content = full docker-compose.vps.yml text (comment lines may be stripped), environment = POSTGRES_PASSWORD + API_TOKEN + MODE=paper + RESEARCH=0 (+ RESEARCH_STRATEGIES/RESEARCH_ARGS/RESEARCH_COMBO for a research run)}. IMPORTANT: `environment` replaces the whole project env, so both secrets must be sent every time. They are stored in the Hostinger hPanel project env for `dailybot` and were in the old session's scratchpad (`vps-secrets.env`, gone in a new container). A new session must ask the user for them (never commit, never echo back). Logs: `vps_docker_logs` {virtualMachineId 1955523, projectName "dailybot"} (~300 lines/service); containers: `vps_docker_containers`.
-- Research job: RESEARCH=1 runs `backtest.js` for each RESEARCH_STRATEGIES entry (add `--brief` in RESEARCH_ARGS for 2-line summaries, ~12 strategies per run) and `combo.js` for each RESEARCH_COMBO portfolio. Set RESEARCH=0 afterwards.
+- 2026-11-18 23:41 UTC: PHASE 2 CODE DEPLOYED (image dc6060e/cd01b8c, CI green). VPS 1955523, project `dailybot`, all containers healthy: `engine` (A-LV + time stop, 4h, 5 coins, db trader, API 127.0.0.1:8081), `engine-st` (st1d, 20 coins, db trader_st, API 8082), `engine-gls` (donchianls, daily rebalance after 00:00 UTC, db trader_gls, API 8083). Kill-switch drawdowns 35% / 25% / 40%. Each engine logs with a `[A]`/`[ST]`/`[GLS]` prefix (BOT_NAME).
+- First report (23:41 UTC): A 10000 -> 9991 (BNB and BTC short open with stops), ST and GLS flat at 10000, portfolio -0.03%, no deviation flags. GLS logged one REBALANCE_SKIPPED (first start at 23:12, the 18 Nov decision was too stale; expected).
+- Done since phase 1: account registry (engine_accounts, sha256 key fingerprint per engine; testnet/live refuses to start without REGISTRY_DATABASE_URL + BOT_NAME unless ALLOW_UNREGISTERED_ACCOUNT=1), per-engine BINANCE_BASE_URL (ST_/GLS_ prefixes), partial-fill retry, MAX_DRAWDOWN-trip and failed-close tests, paper-vs-backtest report (`src/cli/paperReport.ts`, `report` service, REPORT=1), guide baseline MA20/MA50 (`ma2050`, round 11: OOS PF 0.78, fails). Second /e2e-code-review findings fixed in bf8b0be.
+- Tests: 283, all pass with local Postgres.
+- Deploy: Hostinger MCP `vps_docker_create` {virtualMachineId 1955523, project_name "dailybot", content = docker-compose.vps.yml with comment lines stripped, environment = POSTGRES_PASSWORD + API_TOKEN + MODE=paper + RESEARCH=0 + REPORT=1}. LIMIT: `content` must be <= 8192 characters (HTTP 422 otherwise); the file uses anchors (x-universe, x-engine-common, x-api-common) and is ~7.7k stripped, so keep new services small or reuse anchors. `environment` replaces the whole project env, so both secrets must be sent every time. They are in the hPanel project env for `dailybot` (and were in the old session's scratchpad `vps-secrets.env`, gone in a new container). A new session must ask the user for them (never commit, never echo back). Logs: `vps_docker_logs` {virtualMachineId 1955523, projectName "dailybot"}; containers: `vps_docker_list`.
+- Report on demand: redeploy with REPORT=1 (the one-shot `report` service prints A/GLS/ST blocks + portfolio total at start), then read `report-1` in the logs. Post-mortem prompt appears every 30 closed trades per engine.
+- Research job: RESEARCH=1 runs `backtest.js` for each RESEARCH_STRATEGIES entry (add `--brief` in RESEARCH_ARGS) and `combo.js` for each RESEARCH_COMBO. Set RESEARCH=0 afterwards.
 - Local Postgres for tests: `su postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/tmp/te-pg/data -o '-p 55432 -k /var/tmp/te-pg -c listen_addresses=localhost' -l /var/tmp/te-pg/log start"`, then `TEST_DATABASE_URL=postgres://trader@localhost:55432/trader npm test` (recreate if the container is fresh).
-- Gotchas: the safety check false-positives on heredocs/python with `$$` — write edit scripts to the scratchpad with Write (build `$$` as `'$' * 2`) or use Edit. Reading Google Docs links is blocked in this environment (ask the user to paste text).
+- Gotchas: the safety check false-positives on heredocs/python with `$$` (write edit scripts to the scratchpad, build `$$` as `'$' * 2`). Google Docs links are blocked (ask the user to paste text). The old repo URL redirects to aliercankonus/DailyBot; pushes still work.
 - Fails: nothing known.
 
 ## Next steps (ordered)
-1. Verify the first G-LS rebalance and the first Supertrend daily candle (logs). Fix anything broken.
-2. Phase 2, paper period (2-3 months, parameters frozen): build a paper-vs-backtest report (per engine: trades, win rate, PF, R, equity, drawdown, vs the backtest expectation), run it weekly and as a post-mortem after each engine's 30th paper trade (idea from the user's "Self-Improving AI Trader" guide: one versioned change at a time, validated on later data only). Telegram alerts (needs TELEGRAM_BOT_TOKEN/CHAT_ID from the user, via hPanel env). Simple dashboard reading the three APIs. Stop rule: an engine's drawdown beyond its backtest max or large deviation from expectations → stop and investigate.
-3. Before testnet/live: close the deferred review items (see Current state), then the Binance testnet order lifecycle (`BINANCE_STOP_API` auto|algo|legacy); needs testnet keys per engine/sub-account from the user (request_credential / hPanel env, never chat).
-4. Small live capital at 0.5% risk if paper holds up, one Binance sub-account per engine.
-5. Optional research (on new data only): the user's guide example (BTC 1h MA20/MA50 long-only, 0.15% per switch) was offered as a quick test, not yet run; A and Supertrend on more coins; portfolio-level volatility target.
+1. Verify the first G-LS rebalance (2026-11-19 00:00-00:30 UTC: "Rebalance" notification in engine-gls logs, weights in the paper account, a catastrophic stop per leg) and the first Supertrend daily candle (engine-st acts on the 19 Nov 00:00 close). A scheduled check in the old session runs at 00:40 UTC; a new session should check the logs again. Fix anything broken (/e2e-code-review with the security reviewer for src/engine|exchange|risk).
+2. Paper period, 2-3 months, parameters FROZEN: weekly report (REPORT=1 redeploy), post-mortem at each engine's 30th trade, one versioned change at a time and validated on later data only. Stop rule: an engine beyond its backtest max drawdown or flagged deviations -> stop and investigate.
+3. Telegram alerts once the user gives TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (put them in the hPanel env and in the deploy `environment`).
+4. Testnet: one Binance sub-account + testnet keys per engine (hPanel env or request_credential, never chat), ST_/GLS_ MODE=testnet and BINANCE_BASE_URL; check the full order lifecycle (`BINANCE_STOP_API` auto|algo|legacy). The registry blocks reuse of one key across engines.
+5. Small live capital at 0.5% risk if paper holds up.
+6. Optional: dashboard reading the three APIs; A/Supertrend on more coins; portfolio-level vol target (new data only).
 
 ## Suggested skills for the next agent
 - `/e2e-code-review` before merging anything under src/engine, src/exchange or src/risk (security reviewer mandatory); `/delegate` for larger builds (dashboard, report); `/context-handoff` at ~75% context.
 
 ## Open questions for user
+- G-LS and the 2% rule: today G-LS uses a 25%/yr vol target, gross <= 2x, 4-ATR catastrophic stop per leg; a per-leg 2% cap would change the tested strategy (needs a new backtest). Keep as is?
 - Telegram bot token/chat id for alerts? (optional)
 - When will Binance testnet keys (one per engine/sub-account) be available?
 - Capital size for the eventual small live test.
-- Run the guide's MA20/MA50 example test? (offered, no answer yet)
 
 ## Probes
 - What is the recommended portfolio and its backtest numbers? (⅓ st1d + ⅓ trendlv+timestop + ⅓ donchianls; every year positive 2020–26, CAGR 18.5%, Sharpe 1.04, DD 18.6%, from-2025 Sharpe 0.68.)
