@@ -1,5 +1,6 @@
 // npm run backtest -- --strategy trend|pullback|meanrev|funding|tsmom|xsmom --split 2025-01-01
 //   [--symbols ...] [--risk 0.01] [--max-open 3] [--from ...] [--to ...] [--robustness]
+//   [--dd-scale] [--loss-streak]   (risk modifiers, single-symbol strategies only)
 // Defaults for symbols, risk and max-open come from the strategy (src/backtest/catalog.ts).
 //
 // Prints in-sample (before --split) and out-of-sample (from --split) results separately.
@@ -31,6 +32,7 @@ const cfg: BacktestConfig = {
   ...DEFAULT_BACKTEST,
   riskPerTrade: Number(str(a.risk, String(entry.defaultRisk))),
   maxOpenPositions: Number(str(a["max-open"], String(entry.defaultMaxOpen))),
+  riskModifiers: { ddScale: a["dd-scale"] === true, lossStreak: a["loss-streak"] === true },
 };
 
 const all: Record<string, Candle[]> = {};
@@ -77,7 +79,7 @@ function run(params: Params, start: number, end: number) {
 const isWeights = entry.kind === "weights";
 
 console.log(`strategy ${entry.label}: ${entry.describe(DEFAULTS)}  interval ${interval}  symbols ${Object.keys(all).join(",")}`);
-console.log(`costs: taker ${cfg.takerFee * 100}%/side, slippage ${cfg.slippage * 100}%/fill, funding ${cfg.fundingRates ? `historical (${Object.keys(cfg.fundingRates).length} symbols)` : `${cfg.fundingPer8h * 100}%/8h flat`}  risk ${cfg.riskPerTrade * 100}%/trade, max ${cfg.maxOpenPositions} open\n`);
+console.log(`costs: taker ${cfg.takerFee * 100}%/side, slippage ${cfg.slippage * 100}%/fill, funding ${cfg.fundingRates ? `historical (${Object.keys(cfg.fundingRates).length} symbols)` : `${cfg.fundingPer8h * 100}%/8h flat`}  risk ${cfg.riskPerTrade * 100}%/trade, max ${cfg.maxOpenPositions} open${cfg.riskModifiers?.ddScale ? ", dd-scale" : ""}${cfg.riskModifiers?.lossStreak ? ", loss-streak" : ""}\n`);
 
 const ins = run(DEFAULTS, 0, split);
 console.log(`== IN-SAMPLE (before ${new Date(split).toISOString().slice(0, 10)}) ==\n${isWeights ? formatEquity(ins.eq) : formatMetrics(ins.m)}\n`);

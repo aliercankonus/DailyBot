@@ -29,6 +29,12 @@ export interface BacktestConfig {
   /** Entries before this time are ignored (candles before it are indicator warm-up only). */
   tradeFromMs?: number;
   /**
+   * Risk modifiers from the old bot, fixed so they can be tested:
+   *  ddScale: risk x clamp(1 - drawdown/0.20, 0.5, 1), drawdown from the MTM equity peak.
+   *  lossStreak: after 3 consecutive losing trades, risk x 0.5 until a win or a new equity peak.
+   */
+  riskModifiers?: { ddScale?: boolean; lossStreak?: boolean };
+  /**
    * Historical funding per symbol. When present, each settlement charges the real signed rate
    * (longs pay positive funding, shorts receive it) instead of the flat fundingPer8h cost.
    */
@@ -106,6 +112,8 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
   }
 
   let cash = cfg.initialEquity; // realized equity
+  let equityPeak = cfg.initialEquity;
+  let lossStreak = 0;
   const open = new Map<string, OpenPos>();
   const pending = new Map<string, { side: Side; stop: number }>();
   const trades: BacktestTrade[] = [];
@@ -119,6 +127,7 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
     const net = gross - fees - p.funding;
     const risk = Math.abs(p.entryPrice - p.initialStop) * p.quantity;
     cash += gross - exitFee - p.funding; // entry fee was already deducted at entry
+    lossStreak = net > 0 ? 0 : lossStreak + 1;
     trades.push({
       symbol: p.symbol, side: p.side, entryTime: p.entryTime, exitTime: time,
       entryPrice: p.entryPrice, exitPrice, quantity: p.quantity, initialStop: p.initialStop,
@@ -144,9 +153,14 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
           const invalid = pend.side === "LONG" ? fillPrice <= pend.stop : fillPrice >= pend.stop;
           if (!invalid) {
             const equity = markToMarket();
+            equityPeak = Math.max(equityPeak, equity);
+            if (equity >= equityPeak) lossStreak = 0;
+            let risk = cfg.riskPerTrade;
+            if (cfg.riskModifiers?.ddScale) risk *= Math.min(1, Math.max(0.5, 1 - (equityPeak - equity) / equityPeak / 0.2));
+            if (cfg.riskModifiers?.lossStreak && lossStreak >= 3) risk *= 0.5;
             const size = sizePosition({
               equity, availableBalance: equity - marginInUse(open), entryPrice: fillPrice,
-              stopPrice: pend.stop, riskPerTrade: cfg.riskPerTrade, maxLeverage: cfg.maxLeverage,
+              stopPrice: pend.stop, riskPerTrade: risk, maxLeverage: cfg.maxLeverage,
               filters: cfg.filters?.[s] ?? LOOSE_FILTERS(s),
               roundTripCostPct: 2 * (cfg.takerFee + cfg.slippage),
             });

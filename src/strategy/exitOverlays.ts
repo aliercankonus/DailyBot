@@ -1,0 +1,96 @@
+// Exit overlays: the well-defined exit ideas from the old bot, rewritten in R units
+// (R = |entry - initialStop|) as pure functions of closed candles + position state.
+// In the old system they were database-only (never reached the exchange), overlapping and
+// partly broken; here an overlay wraps any Strategy so it can be backtested with and without.
+//
+//  * break-even: once MFE >= beAt R, stop -> entry (+ a small buffer for fees).
+//  * lock tiers: peak R 1/1.5/2/2.5/3/4/5 -> lock 0.25/0.5/0.75/1/1.5/2/3 R.
+//  * R trailing: once the close is >= trailAt R in profit, stop -> close -/+ trailDist R.
+//  * loser time stop: after loserBars candles, exit if the close is worse than -loserR R.
+//  * early invalidation: after earlyBars candles, exit if MFE < 0.1 R and close <= -0.4 R.
+// Stops only ever tighten: overlays take the more protective of the base and overlay stop.
+import type { Candle, OpenPositionView } from "../core/types.js";
+import type { Strategy } from "./types.js";
+
+export interface ExitOverlay {
+  breakEvenAt?: number;      // R
+  breakEvenBuffer?: number;  // fraction of price, e.g. 0.002
+  lockTiers?: boolean;
+  trailAt?: number;          // R
+  trailDist?: number;        // R
+  loserBars?: number;
+  loserR?: number;
+  earlyBars?: number;
+}
+
+const LOCK_TIERS: [number, number][] = [[5, 3], [4, 2], [3, 1.5], [2.5, 1], [2, 0.75], [1.5, 0.5], [1, 0.25]];
+
+function sinceEntry(p: OpenPositionView, candles: Candle[]) {
+  return candles.filter((k) => k.openTime >= p.entryCandleOpenTime);
+}
+
+/** Maximum favourable excursion in R since entry (from highs/lows of closed candles). */
+export function mfeR(p: OpenPositionView, candles: Candle[]): number {
+  const r = Math.abs(p.entryPrice - p.initialStop);
+  const s = sinceEntry(p, candles);
+  if (!(r > 0) || !s.length) return 0;
+  const best = p.side === "LONG" ? Math.max(...s.map((k) => k.high)) - p.entryPrice : p.entryPrice - Math.min(...s.map((k) => k.low));
+  return best / r;
+}
+
+/** Close-based P&L in R. */
+export function closeR(p: OpenPositionView, candles: Candle[]): number {
+  const r = Math.abs(p.entryPrice - p.initialStop);
+  const c = candles.at(-1)!.close;
+  return r > 0 ? (p.side === "LONG" ? c - p.entryPrice : p.entryPrice - c) / r : 0;
+}
+
+export function overlayStop(o: ExitOverlay, p: OpenPositionView, candles: Candle[]): number {
+  const r = Math.abs(p.entryPrice - p.initialStop);
+  if (!(r > 0)) return p.stop;
+  const dir = p.side === "LONG" ? 1 : -1;
+  const tighter = (a: number, b: number) => (p.side === "LONG" ? Math.max(a, b) : Math.min(a, b));
+  let stop = p.stop;
+  const peak = mfeR(p, candles);
+  if (o.breakEvenAt !== undefined && peak >= o.breakEvenAt) {
+    stop = tighter(stop, p.entryPrice * (1 + dir * (o.breakEvenBuffer ?? 0.002)));
+  }
+  if (o.lockTiers) {
+    const tier = LOCK_TIERS.find(([at]) => peak >= at);
+    if (tier) stop = tighter(stop, p.entryPrice + dir * tier[1] * r);
+  }
+  if (o.trailAt !== undefined && o.trailDist !== undefined && closeR(p, candles) >= o.trailAt) {
+    stop = tighter(stop, candles.at(-1)!.close - dir * o.trailDist * r);
+  }
+  return stop;
+}
+
+export function overlayExit(o: ExitOverlay, p: OpenPositionView, candles: Candle[]): boolean {
+  const held = sinceEntry(p, candles).length;
+  if (o.loserBars !== undefined && held >= o.loserBars && closeR(p, candles) < -(o.loserR ?? 0.5)) return true;
+  if (o.earlyBars !== undefined && held >= o.earlyBars && mfeR(p, candles) < 0.1 && closeR(p, candles) <= -0.4) return true;
+  return false;
+}
+
+/** Wrap a strategy with an exit overlay. The base strategy's own stop and exits still apply. */
+export function withExits(base: Strategy, o: ExitOverlay, tag: string): Strategy {
+  return {
+    ...base,
+    name: `${base.name} + ${tag}`,
+    updateStop(p, candles) {
+      const b = base.updateStop(p, candles);
+      return overlayStop(o, { ...p, stop: b }, candles);
+    },
+    shouldExit(p, candles) {
+      return (base.shouldExit?.(p, candles) ?? false) || overlayExit(o, p, candles);
+    },
+  };
+}
+
+/** The overlay presets tested in PROGRESS.md (translated from the old bot's % rules to R). */
+export const EXIT_PRESETS: Record<string, ExitOverlay> = {
+  be: { breakEvenAt: 1, breakEvenBuffer: 0.002 },
+  lock: { lockTiers: true },
+  trail: { trailAt: 1.2, trailDist: 0.75 },
+  timestop: { loserBars: 6, loserR: 0.5, earlyBars: 3 },
+};
