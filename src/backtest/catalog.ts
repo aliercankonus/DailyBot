@@ -1,5 +1,6 @@
 // Everything the backtest CLI can run: single-symbol strategies (registry.ts) and portfolio
 // strategies (E). Each entry knows how to run itself, so the CLI treats them all the same.
+import { createRelativeValue, DEFAULT_REVERT, DEFAULT_RV_TREND } from "../strategy/relativeValue.js";
 import type { Candle } from "../core/types.js";
 import { getStrategy, STRATEGY_NAMES } from "../strategy/registry.js";
 import { createXsMomentum, DEFAULT_XS_MOMENTUM } from "../strategy/xsMomentum.js";
@@ -63,6 +64,14 @@ export function getCatalogEntry(name: string): CatalogEntry {
     return weightsEntry("H", { ...DEFAULT_FUNDING_CARRY }, ["lookbackDays", "rebalanceEvery"], [],
       (p) => createFundingCarry({ ...DEFAULT_FUNDING_CARRY, ...p }), true);
   }
+  if (name === "ethbtcmr" || name === "altbtcmr" || name === "altbtctrend") {
+    // Round 10: market-neutral relative value vs BTC (src/strategy/relativeValue.ts), standard settings.
+    const alts = name === "ethbtcmr" ? ["ETHUSDT"] : UNIVERSE_20.filter((x) => x !== "BTCUSDT");
+    const mode = name === "altbtctrend" ? "trend" : "revert";
+    const defaults = mode === "trend" ? DEFAULT_RV_TREND : DEFAULT_REVERT;
+    return weightsEntry(name === "ethbtcmr" ? "R1" : mode === "trend" ? "R3" : "R2", { ...defaults }, ["lookback"], [],
+      (p) => createRelativeValue(mode, alts, { ...defaults, ...p } as typeof defaults));
+  }
   if (name === "btchold") return weightsEntry("BM1", {}, [], [], () => createBtcHold());
   if (name === "ewhold") return weightsEntry("BM2", {}, [], [], () => createEqualWeightHold());
   if (name === "xsmom") {
@@ -100,4 +109,4 @@ export function getCatalogEntry(name: string): CatalogEntry {
   };
 }
 
-export const CATALOG_NAMES = [...STRATEGY_NAMES, "xsmom", "donchian", "donchianls", "carry", "btchold", "ewhold"];
+export const CATALOG_NAMES = [...STRATEGY_NAMES, "xsmom", "donchian", "donchianls", "carry", "btchold", "ewhold", "ethbtcmr", "altbtcmr", "altbtctrend"];
