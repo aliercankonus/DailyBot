@@ -7,7 +7,7 @@ import { Engine } from "../engine/engine.js";
 import { INTERVAL_MS } from "../config.js";
 import { getStrategy } from "../strategy/registry.js";
 import { DEFAULT_WEIGHTS_ENGINE, WeightsEngine } from "../engine/weightsEngine.js";
-import { isWeightStrategy, WEIGHT_STRATEGIES } from "../strategy/weightRegistry.js";
+import { isWeightStrategy, validateEngineStrategy, WEIGHT_STRATEGIES } from "../strategy/weightRegistry.js";
 import { makeExchange, makeNotifier, makePool } from "./runtime.js";
 
 const ENGINE_LOCK_ID = 727_001;
@@ -28,6 +28,8 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 }
 
 const cfg = loadConfig(process.env, "engine");
+// Fail fast on a bad STRATEGY, before taking the lock or creating an exchange client.
+validateEngineStrategy(cfg.STRATEGY, cfg.MAX_LEVERAGE, (n) => getStrategy(n));
 const baseNotifier = makeNotifier(cfg);
 const notifier = cfg.BOT_NAME ? { send: (level: Parameters<typeof baseNotifier.send>[0], text: string) => baseNotifier.send(level, `[${cfg.BOT_NAME}] ${text}`) } : baseNotifier;
 const pool = makePool(cfg);

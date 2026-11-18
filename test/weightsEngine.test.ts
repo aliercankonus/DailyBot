@@ -120,6 +120,87 @@ describe("weights engine", () => {
     expect(await pos(ex, "ETHUSDT")).toBeNull();
   });
 
+  it("a throw during rebalance still protects open positions, and the day is retried", async () => {
+    const { ex, repo, engine } = setup({ [N - 1]: { BTCUSDT: 0.5, ETHUSDT: -0.3 } });
+    await engine.tick();
+    for (const s of ["BTCUSDT", "ETHUSDT"]) for (const st of await ex.getOpenStops(s)) await ex.cancelStop(s, st.id);
+    await repo.setState("lastRebalance", null);
+    const orig = ex.getBalance.bind(ex);
+    let calls = 0;
+    ex.getBalance = async () => { if (++calls === 2) throw new Error("boom"); return orig(); }; // inside rebalance
+    await engine.tick();
+    expect(repo.events.some((e) => e.kind === "REBALANCE_FAILED")).toBe(true);
+    expect(await ex.getOpenStops("BTCUSDT")).toHaveLength(1);
+    expect(await ex.getOpenStops("ETHUSDT")).toHaveLength(1);
+    expect(await repo.getState("lastRebalance")).toBeNull();
+  });
+
+  it("one symbol failing its stop check does not leave the others unprotected", async () => {
+    const { ex, repo, engine } = setup({ [N - 1]: { BTCUSDT: 0.5, ETHUSDT: -0.3 } });
+    await engine.tick();
+    for (const s of ["BTCUSDT", "ETHUSDT"]) for (const st of await ex.getOpenStops(s)) await ex.cancelStop(s, st.id);
+    const orig = ex.getOpenStops.bind(ex);
+    ex.getOpenStops = async (s) => { if (s === "BTCUSDT") throw new Error("down"); return orig(s); };
+    await engine.ensureStops();
+    expect(repo.events.some((e) => e.kind === "STOP_CHECK_FAILED" && e.symbol === "BTCUSDT")).toBe(true);
+    expect(await orig("ETHUSDT")).toHaveLength(1);
+  });
+
+  it("a failed leg keeps the day open and is retried on the next tick", async () => {
+    const { ex, repo, engine } = setup({ [N - 1]: { BTCUSDT: 0.5 } });
+    const orig = ex.marketOrder.bind(ex);
+    let fail = true;
+    ex.marketOrder = async (p) => (fail ? { orderId: "r", clientOrderId: p.clientOrderId, status: "REJECTED", executedQty: 0, avgPrice: 0 } : orig(p));
+    await engine.tick();
+    expect(await pos(ex, "BTCUSDT")).toBeNull();
+    expect(await repo.getState("lastRebalance")).toBeNull();
+    fail = false;
+    await engine.tick();
+    expect((await pos(ex, "BTCUSDT"))?.side).toBe("LONG");
+    expect(await repo.getState("lastRebalance")).toBe(T0 + (N - 1) * D);
+  });
+
+  it("waits for every symbol's candle, then trades without a missing one after the wait", async () => {
+    const { ex, repo, engine, data, at } = setup({ [N - 1]: { BTCUSDT: 0.5, ETHUSDT: -0.3 } });
+    const eth = data.ETHUSDT!;
+    data.ETHUSDT = eth.slice(0, N - 1); // ETH's last candle is not in yet
+    await engine.tick();
+    expect(await pos(ex, "BTCUSDT")).toBeNull();
+    at(T0 + N * D + 31 * 60_000);
+    await engine.tick();
+    expect((await pos(ex, "BTCUSDT"))?.side).toBe("LONG");
+    expect(repo.events.some((e) => e.kind === "DATA_MISSING")).toBe(true);
+  });
+
+  it("keeps a long stop positive for a very volatile symbol and re-bases a stale stop", async () => {
+    const { ex, repo, engine, mark, data } = setup({ [N - 1]: { BTCUSDT: 0.5 } });
+    await engine.tick();
+    // Huge ATR: 4 x ATR is above the price; the stop is capped at half the price.
+    await repo.setState("stopRefs", { BTCUSDT: { price: 100, atr: 40 } });
+    for (const st of await ex.getOpenStops("BTCUSDT")) await ex.cancelStop("BTCUSDT", st.id);
+    await engine.ensureStops();
+    const [st] = await ex.getOpenStops("BTCUSDT");
+    expect(st!.stopPrice).toBeGreaterThan(0);
+    expect(st!.stopPrice).toBeCloseTo(50, 0);
+    // Stale reference far above the market: the stop would trigger, so it is re-based on the latest price.
+    await repo.setState("stopRefs", { BTCUSDT: { price: 1000, atr: 1 } });
+    for (const s2 of await ex.getOpenStops("BTCUSDT")) await ex.cancelStop("BTCUSDT", s2.id);
+    mark.BTCUSDT = data.BTCUSDT![N - 1]!.close;
+    await engine.ensureStops();
+    expect(await pos(ex, "BTCUSDT")).not.toBeNull();
+    expect(repo.events.some((e) => e.kind === "STOP_REBASED")).toBe(true);
+  });
+
+  it("skips an open below the exchange minimum notional without failing the day", async () => {
+    const { ex, repo, engine } = setup({ [N - 1]: { BTCUSDT: 0.5, ETHUSDT: 0.0004 } });
+    // 0.04% of 10k = 4 USDT < min notional 5; band 0 so only the minimum stops it.
+    (engine as unknown as { d: { cfg: { band: number } } }).d.cfg.band = 0;
+    await engine.tick();
+    expect(await pos(ex, "ETHUSDT")).toBeNull();
+    expect(repo.events.some((e) => e.kind === "ORDER_TOO_SMALL")).toBe(true);
+    expect(await repo.getState("lastRebalance")).toBe(T0 + (N - 1) * D);
+  });
+
   it("closes at market when the stop cannot be placed", async () => {
     const { ex, repo, engine, mark, data } = setup({ [N - 1]: { BTCUSDT: 0.5 } });
     await engine.tick();

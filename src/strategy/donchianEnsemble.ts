@@ -80,6 +80,7 @@ export function createDonchianEnsemble(p: DonchianEnsembleParams = DEFAULT_DONCH
     name: `donchian-ensemble(${DONCHIAN_LOOKBACKS.join("/")}d, vol ${p.volTarget} over ${p.volLookback}d, gross<=${p.maxGross}${p.allowShort ? ", long+short" : ", long only"})`,
     interval: "1d",
     rebalanceEvery: 1,
+    maxGross: p.maxGross,
 
     weightSeries({ candles }: WeightInputs) {
       const symbols = Object.keys(candles);

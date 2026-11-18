@@ -4,7 +4,8 @@
 # (MODE=paper: live public market data, simulated account, no API keys).
 # Before testnet/live, pin IMAGE_TAG to a commit sha tag (see .env.example).
 #
-# Port 8080 on this VPS belongs to signal-desk; this project's API uses 127.0.0.1:8081.
+# Port 8080 on this VPS belongs to signal-desk; this project's APIs use 127.0.0.1:8081 (engine A),
+# 8082 (engine-st) and 8083 (engine-gls).
 #
 # Each service only receives the variables it needs: Binance and Telegram secrets go to the
 # engine only, API_TOKEN to the api only, and research gets nothing secret.
@@ -91,7 +92,7 @@ services:
       MAX_LEVERAGE: ${MAX_LEVERAGE:-3}
       MAX_OPEN_POSITIONS: ${MAX_OPEN_POSITIONS:-3}
       DAILY_LOSS_LIMIT: ${DAILY_LOSS_LIMIT:-0.03}
-      MAX_DRAWDOWN: ${MAX_DRAWDOWN:-0.35}
+      MAX_DRAWDOWN: ${A_MAX_DRAWDOWN:-0.35}
       PAPER_START_BALANCE: ${PAPER_START_BALANCE:-10000}
       TAKER_FEE: ${TAKER_FEE:-0.0005}
       SLIPPAGE: ${SLIPPAGE:-0.0005}
@@ -160,6 +161,45 @@ services:
       migrate: { condition: service_completed_successfully }
     ports:
       - "127.0.0.1:8081:8080"
+    mem_limit: 256m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # One API per engine database: status, equity and the kill switch of each engine.
+  api-st:
+    <<: *node
+    command: ["node", "dist/cli/api.js"]
+    environment:
+      MODE: ${MODE:-paper}
+      API_TOKEN: ${API_TOKEN:?set API_TOKEN}
+      DATABASE_URL: *dburl_st
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    ports:
+      - "127.0.0.1:8082:8080"
+    mem_limit: 256m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  api-gls:
+    <<: *node
+    command: ["node", "dist/cli/api.js"]
+    environment:
+      MODE: ${MODE:-paper}
+      API_TOKEN: ${API_TOKEN:?set API_TOKEN}
+      DATABASE_URL: *dburl_gls
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    ports:
+      - "127.0.0.1:8083:8080"
     mem_limit: 256m
     restart: unless-stopped
     healthcheck:
