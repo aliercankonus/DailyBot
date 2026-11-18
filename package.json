@@ -14,6 +14,7 @@
     "lint": "tsc -p tsconfig.json --noEmit",
     "download": "tsx src/cli/download.ts",
     "backtest": "tsx src/cli/backtest.ts",
+    "combo": "tsx src/cli/combo.ts",
     "migrate": "tsx src/cli/migrate.ts",
     "engine": "tsx src/cli/engine.ts",
     "start:engine": "node dist/cli/engine.js",

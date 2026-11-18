@@ -107,6 +107,7 @@ services:
   # Opt-in research job: set RESEARCH=1 in the project environment, then update the project.
   # It downloads 4h/1h candles (5 coins), 1d candles and funding history (20 coins) from 2021,
   # prints a backtest report per strategy to its logs
+  # then the RESEARCH_COMBO portfolios (RESEARCH_STRATEGIES=none skips single runs),
   # and exits 0 if at least one strategy passed the acceptance gate, 2 otherwise. With RESEARCH unset it logs "research skipped" and exits 0.
   research:
     <<: *node
@@ -114,6 +115,8 @@ services:
       RESEARCH: ${RESEARCH:-0}
       RESEARCH_STRATEGIES: ${RESEARCH_STRATEGIES:-donchian carry tsmom xsmom btchold ewhold}
       RESEARCH_ARGS: ${RESEARCH_ARGS:-}
+      # Space-separated portfolios of comma-separated name:weight legs, e.g. "trend:0.5,donchianls:0.5".
+      RESEARCH_COMBO: ${RESEARCH_COMBO:-}
       RESEARCH_UNIVERSE: ${RESEARCH_UNIVERSE:-BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,DOGEUSDT,AVAXUSDT,LINKUSDT,DOTUSDT,LTCUSDT,BCHUSDT,TRXUSDT,ATOMUSDT,ETCUSDT,XLMUSDT,FILUSDT,UNIUSDT,NEARUSDT,AAVEUSDT}
     command:
       - sh
@@ -127,10 +130,15 @@ services:
         node dist/cli/download.js --funding --from 2020-01-01 --dir /data --symbols $$U || exit 1;
         best=2;
         for s in $${RESEARCH_STRATEGIES}; do
+          if [ "$$s" = "none" ]; then continue; fi;
           echo "==================== strategy $$s ====================";
           node dist/cli/backtest.js --strategy $$s --split 2025-01-01 --dir /data --robustness $${RESEARCH_ARGS};
           rc=$$?; echo "strategy $$s finished with exit code $$rc";
           if [ $$rc -eq 0 ]; then best=0; fi;
+        done;
+        for c in $${RESEARCH_COMBO}; do
+          echo "==================== portfolio $$c ====================";
+          node dist/cli/combo.js --legs $$c --split 2025-01-01 --dir /data;
         done;
         echo "research finished with exit code $$best (0 = at least one strategy passed)"; exit $$best
     volumes:
