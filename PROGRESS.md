@@ -44,6 +44,7 @@ Binance USDⓈ-M futures bot (long + short) with a proven out-of-sample edge, ru
 - 2026-11-17: Hostinger VPS (KVM 2, Düsseldorf) Docker project `dailybot`, MODE=paper. db/api/engine healthy, migrate exit 0, engine ticking every 60s (~1.5s per tick). API on 127.0.0.1:8081. Secrets live in the project environment in hPanel.
 
 ## Next
+0. Decide: build engine support for weight strategies (daily rebalance orders + exchange-side catastrophic stops) and forward-test G-LS (and G) in paper mode at a 15% vol target. This is the only out-of-sample test left that is not contaminated by research.
 2. Phase 1 continues: candidate A failed the gate; research candidates B (1h pullback with 4h trend filter) and C (mean reversion), same acceptance criteria.
 3. Testnet run: confirm `BINANCE_STOP_API`, full order lifecycle.
 4. Dashboard (React) reading the API.
@@ -108,6 +109,22 @@ Findings:
 - G has the best full-period Sharpe (0.85) with tiny drawdowns, and the typical trend profile: small losses in 2022/2025/2026 while benchmarks lost 11-67%. Its sizing under-shoots the 25% vol target (realised vol 3.7%) because of the 1/N risk budget; returns scale with exposure, Sharpe does not.
 - H is fragile: 2021 (+171%) carries the whole result, 2022-23 lose, and the 2025 result differs between runs that start on different days (+5.4% vs +23.0%) — path/rebalance-day dependent.
 - E and F: same profile as G but weaker.
+
+### 2026-11-18 — G with portfolio-level volatility targeting (25%), long-only vs long/short (image fa89bce)
+
+| | 2020 | 2021 | 2022 | 2023 | 2024 | 2025 | 2026 YTD | CAGR | Sharpe | Max DD | OOS 2025+ |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| G long only | +104% | +113% | −17.0% | +120% | +64.6% | +7.8% | −11.5% | 44.2% | 1.27 | 44.3% | Sharpe 0.06, DD 44% FAIL |
+| G-LS long/short | +70.3% | +29.0% | +23.3% | +10.7% | +44.4% | −17.8% | +33.4% | 25.4% | 0.92 | 32.6% | Sharpe 0.31, DD 25.5% FAIL |
+| BTC buy & hold | +241% | +17% | −66% | +138% | +97% | −11% | −28% | 22.5% | 0.64 | 79.4% | — |
+| Equal-weight 20 | +146% | +501% | −67% | +112% | +72% | −37% | −25% | 36.3% | 0.80 | 76.3% | — |
+
+Findings:
+- Best results of the whole research. G long-only: highest full-period Sharpe (1.27); G-LS: positive in 6 of 7 years including 2022 (+23%) and 2026 (+33%) when the market fell 25-66%.
+- Neither passes the strict out-of-sample gate (2025-26 is a hard regime for trend: G lost −11.5% in 2026, G-LS −17.8% in 2025).
+- Robustness: ±20% on volTarget/volLookback/maxGross changes OOS Sharpe by at most ~0.2; no cliff.
+- Drawdown scales roughly with the volatility target: at a 15% target, G-LS max DD would be ~20%.
+- About ten candidates have now been tested on the same data; treat the best in-sample numbers with suspicion. The only clean test left is forward (paper) trading.
 
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
