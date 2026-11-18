@@ -3,7 +3,7 @@ import { highestHigh, linreg, lowestLow, macd, supertrend } from "../src/core/in
 import type { Candle, OpenPositionView } from "../src/core/types.js";
 import {
   createConnorsRsi2, createGoldenCross, createIchimoku, createMacd200, createMaxMin10, createNightSeason,
-  createSqueezeLazyBear, createSupertrend, createTurtle55, createVolBreakout,
+  createSqueezeLazyBear, createSupertrend, createTurtle55, createVolBreakout, createMa2050,
 } from "../src/strategy/popular.js";
 import type { Strategy } from "../src/strategy/types.js";
 import { candlesFromCloses } from "./helpers.js";
@@ -123,6 +123,16 @@ describe("popular strategies", () => {
     expect(s.evaluate("X", c)?.side).toBe("LONG");
     const rec = candlesFromCloses([...dip, up.at(-1)! * 1.02], T0, D1);
     expect(s.shouldExit!({ side: "LONG", entryPrice: 100, stop: 90, initialStop: 90, entryCandleOpenTime: 0 }, rec)).toBe(true);
+  });
+
+  it("ma20/50 goes long on the cross up and exits when SMA20 falls below SMA50", () => {
+    const s = createMa2050();
+    const c = vShape(200, H1);
+    const hit = firstSignal(s, c);
+    expect(hit?.sig.side).toBe("LONG");
+    const pos: OpenPositionView = { side: "LONG", entryPrice: 1, stop: 0.5, initialStop: 0.5, entryCandleOpenTime: 0 };
+    expect(s.shouldExit!(pos, c.slice(0, 150))).toBe(true); // falling half
+    expect(s.shouldExit!(pos, c)).toBe(false);              // rising half
   });
 
   it("macd, squeeze and ichimoku produce valid signals on a trending series", () => {

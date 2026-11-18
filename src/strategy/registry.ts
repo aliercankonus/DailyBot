@@ -8,7 +8,7 @@ import type { Strategy } from "./types.js";
 import { EXIT_PRESETS, withExits } from "./exitOverlays.js";
 import {
   createConnorsRsi2, createGoldenCross, createIchimoku, createMacd200, createMaxMin10, createNightSeason,
-  createSqueezeLazyBear, createSupertrend, createTurtle55, createVolBreakout,
+  createSqueezeLazyBear, createSupertrend, createTurtle55, createVolBreakout, createMa2050,
 } from "./popular.js";
 import {
   createCapitulation, createDailyPullback, createFailedBreakout, createSqueezeBreakout,
@@ -111,6 +111,7 @@ export const STRATEGIES = {
   turtle: { label: "P8", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createTurtle55() },
   gcross: { label: "P9", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createGoldenCross() },
   rsi2: { label: "P10", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createConnorsRsi2() },
+  ma2050: { label: "P11", interval: "1h", defaults: {}, integerKeys: new Set<string>(), create: () => createMa2050() },
 } satisfies Record<string, StrategyEntry>;
 
 export type StrategyName = keyof typeof STRATEGIES;

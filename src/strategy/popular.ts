@@ -251,3 +251,26 @@ export function createConnorsRsi2(): Strategy {
     },
   };
 }
+
+/**
+ * P11 "Self-Improving AI Trader" guide baseline: long while SMA20 > SMA50 on 1h candles, else cash.
+ * Enter on the cross up, exit on the cross down; a 3 ATR catastrophic stop (the guide has none).
+ */
+export function createMa2050(): Strategy {
+  return {
+    name: "ma20/50 long-only 1h (guide baseline)", interval: "1h", warmup: 60,
+    evaluate(symbol, candles) {
+      const i = candles.length - 1;
+      if (i < this.warmup) return null;
+      const cl = candles.map((k) => k.close);
+      const f = sma(cl, 20), s = sma(cl, 50), c = candles[i]!, a = atr(candles, 14)[i]!;
+      if (f[i - 1]! <= s[i - 1]! && f[i]! > s[i]!) return sig(symbol, "LONG", c, c.close - 3 * a, "sma20 crossed above sma50");
+      return null;
+    },
+    updateStop: (p) => p.stop,
+    shouldExit(_p, candles) {
+      const cl = candles.map((k) => k.close), i = cl.length - 1;
+      return sma(cl, 20)[i]! < sma(cl, 50)[i]!;
+    },
+  };
+}
