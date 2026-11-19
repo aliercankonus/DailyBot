@@ -125,5 +125,8 @@ export const EXIT_PRESETS: Record<string, ExitOverlay> = {
   // lock3: once MFE >= 3R, lock +1R.
   lock3: { lockTiers: [[3, 1]] },
   // wide3: from 3R a stepped stop 3R behind the peak (entry at 3R, +1R at 4R, ... +17R at 20R).
+  // Round 16: take one third off at 5R, the rest keeps the strategy's own exits (research only:
+  // the live engine refuses takeProfit strategies).
+  tp5: { takeProfit: { levels: [{ r: 5, fraction: 1 / 3 }], breakEvenAfterFirst: false } },
   wide3: { lockTiers: [[3, 0], [4, 1], [5, 2], [6, 3], [8, 5], [10, 7], [15, 12], [20, 17]] },
 };

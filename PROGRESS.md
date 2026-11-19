@@ -391,6 +391,18 @@ Pre-registered fixes (protection only after a large MFE, distances in R, no tigh
 be2 robustness (trigger ±20%): 1.6R → IS 1.43 / OOS 1.45, DD 26.5%; 2.4R → IS 1.37 / OOS 1.48, DD 27.4%. Portfolio 0.5 A + 0.25 GC + 0.25 TS: live Sharpe 1.18 / DD 15.7% / OOS Sharpe 0.95; with GC+be2 Sharpe 1.21 / DD 15.9% / OOS Sharpe 0.93.
 Finding: wide protection keeps the big winners (be2 avg win 5.11R vs the trail's 0.97R) and cuts GC's own drawdown by a third (37.7% → 25.7%), robust to its trigger; but the gain is in sample (mostly 2021), out of sample it is flat (PF 1.48 → 1.47) and the portfolio barely moves. lock3 and wide3 are worse out of sample. Not adopted now (parameters frozen during paper); be2 is the candidate to re-check on paper-period data at GC's post-mortem.
 
+### 2026-11-19 — Round 16: three more ways to keep GC's profits (user: "there must be a solution")
+Pre-registered, different mechanisms from round 15: `gcross1hdt` chandelier at 3 × DAILY ATR(14) (wide, daily-noise scale); `gcross1hema` exit on a close through EMA50 once MFE >= 3R (structure exit); `gcross1h+tp5` take 1/3 off at 5R (research only, live refuses TPs).
+
+| GC exit | IS PF | OOS PF | OOS E | CAGR | Sharpe | max DD | robustness (OOS PF at ±20%) |
+|---|---|---|---|---|---|---|---|
+| live | 1.35 | 1.48 | 0.445R | 24.0% | 0.82 | 37.7% | |
+| be2 (round 15) | 1.43 | 1.47 | 0.389R | 26.8% | 0.90 | 25.7% | 1.45 / 1.48 |
+| 3 × daily ATR trail | 1.26 | 1.42 | 0.399R | 19.3% | 0.73 | 30.1% | 1.21 / 1.40 |
+| EMA50 exit after 3R | 1.11 | 1.18 | 0.197R | 7.9% | 0.44 | 33.4% | 1.18 / 1.14 |
+| 1/3 off at 5R | 1.29 | 1.35 | 0.332R | 18.2% | 0.75 | 31.2% | |
+Finding: all three lower returns; the earlier the exit reacts, the worse (EMA50 exit worst). Over seven exit designs (rounds 14-16) only be2 helps, and only on drawdown. GC's winners already capture 50% of their MFE; the part given back on the way out of a trend is what pays for the 10R+ tails. Conclusion: per-trade giveback is a structural cost of trend following, not a bug; the account-level answer is diversification (3 engines, correlation ~0.55) and sizing, not tighter exits. be2 stays the only candidate for GC's post-mortem.
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.

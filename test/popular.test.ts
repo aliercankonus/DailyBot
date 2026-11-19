@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { highestHigh, linreg, lowestLow, macd, supertrend } from "../src/core/indicators.js";
 import type { Candle, OpenPositionView } from "../src/core/types.js";
 import {
-  createConnorsRsi2, createGoldenCross, createIchimoku, createMacd200, createMaxMin10, createNightSeason,
+  createConnorsRsi2, createGoldenCross, createIchimoku, dailyAtr, createMacd200, createMaxMin10, createNightSeason,
   createSqueezeLazyBear, createSupertrend, createTurtle55, createVolBreakout, createMa2050,
 } from "../src/strategy/popular.js";
 import type { Strategy } from "../src/strategy/types.js";
@@ -159,5 +159,22 @@ describe("golden cross trailing stop (round 14)", () => {
     expect(up).toBeGreaterThan(140);
     expect(up).toBeLessThan(cs.at(-1)!.high);
     expect(s.updateStop({ ...pos, stop: 1e9 }, cs)).toBe(1e9);
+  });
+});
+
+describe("round 16 GC exits", () => {
+  it("dailyAtr builds complete UTC days and needs n+1 of them", () => {
+    const cs = candlesFromCloses(Array.from({ length: 24 * 20 }, (_, i) => 100 + (i % 24)), T0, H1);
+    const d = dailyAtr(cs)!;
+    expect(d).toBeGreaterThan(20); // daily range ~23 + spread
+    expect(dailyAtr(cs.slice(0, 24 * 10))).toBeNull();
+  });
+  it("ema exit only after the MFE threshold", () => {
+    const up = Array.from({ length: 300 }, (_, i) => 100 + i);
+    const cs = candlesFromCloses([...up, 250], T0, H1); // last close drops below EMA50
+    const pos = (stop: number): OpenPositionView => ({ side: "LONG", entryPrice: 200, stop, initialStop: stop, entryCandleOpenTime: cs[200]!.openTime });
+    const s = createGoldenCross("1h", { emaExitAfterR: 3 });
+    expect(s.shouldExit!(pos(190), cs)).toBe(true);   // MFE ~ 10R
+    expect(s.shouldExit!(pos(100), cs)).toBe(false);  // MFE ~ 1R
   });
 });

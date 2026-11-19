@@ -173,7 +173,7 @@ describe("backtest strategy exits", () => {
 
 describe("registry", () => {
   it("every strategy has a matching interval", () => {
-    expect(STRATEGY_NAMES).toEqual(["trend", "trendlv", "trendlvtk", "trendlvoi", "pullback", "meanrev", "funding", "tsmom", "tsmom4h", "failedbo", "squeeze", "capit", "dpullback", "st4h", "st1d", "macd", "sqzlb", "ichi", "maxmin", "volbo", "night", "turtle", "gcross", "gcross1h", "gcross1htr", "rsi2", "ma2050"]);
+    expect(STRATEGY_NAMES).toEqual(["trend", "trendlv", "trendlvtk", "trendlvoi", "pullback", "meanrev", "funding", "tsmom", "tsmom4h", "failedbo", "squeeze", "capit", "dpullback", "st4h", "st1d", "macd", "sqzlb", "ichi", "maxmin", "volbo", "night", "turtle", "gcross", "gcross1h", "gcross1htr", "gcross1hdt", "gcross1hema", "rsi2", "ma2050"]);
     for (const name of STRATEGY_NAMES) {
       const e = getStrategy(name);
       expect(e.create().interval).toBe(e.interval);

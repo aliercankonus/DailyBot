@@ -211,13 +211,52 @@ export function createTurtle55(): Strategy {
 }
 
 /** P9 Golden / death cross EMA 50/200 daily, always in the market; 3 ATR catastrophic stop. */
-/**
- * trailAtr (0 = off): chandelier trailing stop, highest high (lowest low) since entry -/+ trailAtr x ATR(14),
- * only ever tightening. Round 14 research: the fixed 3-ATR stop gave back 1R+ on 155 losers.
- */
-export function createGoldenCross(interval: "1h" | "4h" | "1d" = "1d", trailAtr = 0): Strategy {
+export interface GoldenCrossExits {
+  /** Chandelier trail: extreme since entry -/+ trailAtr x ATR(14) of the strategy interval (0 = off). Round 14. */
+  trailAtr?: number;
+  /** Chandelier trail on DAILY volatility: extreme since entry -/+ dailyTrailAtr x daily ATR(14) built from the candles (0 = off). Round 16. */
+  dailyTrailAtr?: number;
+  /** Once MFE >= emaExitAfterR (in R), exit when the close crosses EMA50 against the position (0 = off). Round 16. */
+  emaExitAfterR?: number;
+}
+
+/** Simple ATR(n) of complete UTC days built from intraday candles (null with fewer than n+1 days). */
+export function dailyAtr(candles: Candle[], n = 14): number | null {
+  const DAY = 86_400_000;
+  const days: { d: number; h: number; l: number; c: number }[] = [];
+  for (const k of candles) {
+    const d = Math.floor(k.openTime / DAY);
+    const last = days.at(-1);
+    if (last && last.d === d) {
+      last.h = Math.max(last.h, k.high); last.l = Math.min(last.l, k.low); last.c = k.close;
+    } else days.push({ d, h: k.high, l: k.low, c: k.close });
+  }
+  // Drop the last day unless its final candle closes at the end of that UTC day.
+  const lastC = candles.at(-1);
+  if (lastC && days.length && lastC.closeTime + 1 < (days.at(-1)!.d + 1) * DAY) days.pop();
+  if (days.length < n + 1) return null;
+  let sum = 0;
+  for (let i = days.length - n; i < days.length; i++) {
+    const d = days[i]!, prev = days[i - 1]!.c;
+    sum += Math.max(d.h - d.l, Math.abs(d.h - prev), Math.abs(d.l - prev));
+  }
+  return sum / n;
+}
+
+export function createGoldenCross(interval: "1h" | "4h" | "1d" = "1d", exits: GoldenCrossExits | number = {}): Strategy {
+  const o: GoldenCrossExits = typeof exits === "number" ? { trailAtr: exits } : exits;
+  const trailAtr = o.trailAtr ?? 0, dailyTrailAtr = o.dailyTrailAtr ?? 0, emaExitAfterR = o.emaExitAfterR ?? 0;
+  const tags = [trailAtr > 0 ? ` trail ${trailAtr}atr` : "", dailyTrailAtr > 0 ? ` trail ${dailyTrailAtr}x daily atr` : "", emaExitAfterR > 0 ? ` ema50 exit after ${emaExitAfterR}R` : ""].join("");
+  const extremes = (p: OpenPositionView, candles: Candle[]) => {
+    let hh = -Infinity, ll = Infinity;
+    for (let j = candles.length - 1; j >= 0 && candles[j]!.openTime >= p.entryCandleOpenTime; j--) {
+      hh = Math.max(hh, candles[j]!.high);
+      ll = Math.min(ll, candles[j]!.low);
+    }
+    return { hh, ll };
+  };
   return {
-    name: `golden-cross(ema50/200) ${interval}${trailAtr > 0 ? ` trail ${trailAtr}atr` : ""}`, interval, warmup: 210,
+    name: `golden-cross(ema50/200) ${interval}${tags}`, interval, warmup: 210,
     evaluate(symbol, candles) {
       const i = candles.length - 1;
       if (i < this.warmup) return null;
@@ -236,21 +275,31 @@ export function createGoldenCross(interval: "1h" | "4h" | "1d" = "1d", trailAtr 
       return `ema50 ${fmt(f)} ${side} ema200 ${fmt(s)} (gap ${gap.toFixed(2)}%); trades only on the bar where ema50 crosses ema200 (next: ${f > s ? "death cross -> short" : "golden cross -> long"})`;
     },
     updateStop(p, candles) {
-      if (trailAtr <= 0) return p.stop;
-      const i = candles.length - 1, a = atr(candles, 14)[i];
-      if (a === undefined || !Number.isFinite(a)) return p.stop;
-      let hh = -Infinity, ll = Infinity;
-      for (let j = i; j >= 0 && candles[j]!.openTime >= p.entryCandleOpenTime; j--) {
-        hh = Math.max(hh, candles[j]!.high);
-        ll = Math.min(ll, candles[j]!.low);
-      }
+      if (trailAtr <= 0 && dailyTrailAtr <= 0) return p.stop;
+      const { hh, ll } = extremes(p, candles);
       if (!Number.isFinite(hh)) return p.stop;
-      return tighten(p, p.side === "LONG" ? hh - trailAtr * a : ll + trailAtr * a);
+      let stop = p.stop;
+      if (trailAtr > 0) {
+        const a = atr(candles, 14)[candles.length - 1];
+        if (a !== undefined && Number.isFinite(a)) stop = tighten({ ...p, stop }, p.side === "LONG" ? hh - trailAtr * a : ll + trailAtr * a);
+      }
+      if (dailyTrailAtr > 0) {
+        const d = dailyAtr(candles);
+        if (d !== null && d > 0) stop = tighten({ ...p, stop }, p.side === "LONG" ? hh - dailyTrailAtr * d : ll + dailyTrailAtr * d);
+      }
+      return stop;
     },
     shouldExit(p, candles) {
       const cl = candles.map((k) => k.close), i = cl.length - 1;
-      const f = ema(cl, 50)[i]!, s = ema(cl, 200)[i]!;
-      return p.side === "LONG" ? f < s : f > s;
+      const e50 = ema(cl, 50), f = e50[i]!, s = ema(cl, 200)[i]!;
+      if (p.side === "LONG" ? f < s : f > s) return true;
+      if (emaExitAfterR > 0) {
+        const r = Math.abs(p.entryPrice - p.initialStop);
+        const { hh, ll } = extremes(p, candles);
+        const mfe = r > 0 ? (p.side === "LONG" ? hh - p.entryPrice : p.entryPrice - ll) / r : 0;
+        if (mfe >= emaExitAfterR && (p.side === "LONG" ? cl[i]! < f : cl[i]! > f)) return true;
+      }
+      return false;
     },
   };
 }

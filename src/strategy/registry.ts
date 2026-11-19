@@ -141,7 +141,17 @@ export const STRATEGIES = {
   // GC with a 3-ATR chandelier trail (round 14, pre-registered = its own initial stop distance). Research only.
   gcross1htr: {
     label: "P9-1h-TR", interval: "1h", defaults: { trailAtr: 3 }, integerKeys: new Set<string>(),
-    create: (p) => createGoldenCross("1h", p?.trailAtr ?? 3),
+    create: (p) => createGoldenCross("1h", { trailAtr: p?.trailAtr ?? 3 }),
+  },
+  // Round 16 (pre-registered): GC with a chandelier trail at 3 x DAILY ATR(14).
+  gcross1hdt: {
+    label: "P9-1h-DT", interval: "1h", defaults: { dailyTrailAtr: 3 }, integerKeys: new Set<string>(),
+    create: (p) => createGoldenCross("1h", { dailyTrailAtr: p?.dailyTrailAtr ?? 3 }),
+  },
+  // Round 16 (pre-registered): GC exits on a close through EMA50 once the trade has reached 3R.
+  gcross1hema: {
+    label: "P9-1h-EMA", interval: "1h", defaults: { emaExitAfterR: 3 }, integerKeys: new Set<string>(),
+    create: (p) => createGoldenCross("1h", { emaExitAfterR: p?.emaExitAfterR ?? 3 }),
   },
   rsi2: { label: "P10", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createConnorsRsi2() },
   ma2050: { label: "P11", interval: "1h", defaults: {}, integerKeys: new Set<string>(), create: () => createMa2050() },
