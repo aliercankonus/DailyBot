@@ -1,4 +1,4 @@
-# Handoff — DailyBot paper portfolio (phase 2 deployed) — 2026-11-18
+# Handoff — DailyBot BTC/ETH paper portfolio (round 12) — 2026-11-19
 
 GOAL (verbatim, user messages in order, Turkish):
 - "Simdi bizim agentic pattern adinda bir baslangic repomuz var, onun uzerine insa edelim bu sistemi hatalari duzeltip eksiklikleri giderip sistemi ekleyerek. Cunku lovable da calismayacak artik ve bizim hostinger de vps imiz var onu kullanabiliriz"
@@ -11,6 +11,7 @@ GOAL (verbatim, user messages in order, Turkish):
 - "Ama en azından hedefe ulastikca stop loss o anki fiyata getirmeyi eklememiz alzim. Diyelim ki hedefin yuzde 50 sine ulastik stopnloss ons gore gubcelleniyor"
 - "Tamam en iyi sonucu bulana kadar arastir ve bul, zararlarida nasil engelleriz sebepleri neler incele"
 - "Tamam 8. Tur sonrasi en iyi ihtinalleri birlwtirip bana guzel analiz yap ve geleceknplanalrimizi ortaya ciksin"
+- (2026-11-19) "At first lets focus on eth snd btc. And i want you to find best of best results. You have past data and you can find how we can profit for each timeline.  If you say 2 percent is good for gls, do it. I will start with 2000 euro capitql amount. I will give telegram and binance testnet keys soon"
 - "Hayirbtum indikatorn veya baska method stratejileri aradtir derin bir sekilde. Internet videolari aramalari gez. Ben bu sonuctan memnun degilim. Sen dunyanin en iyi traderisin ve daha once en cok kazanan en az kaybeden botunu yapmis kisisin. Buna gore aradtirmani yap test et va bana haber ver"
 
 CONSTRAINTS (verbatim): Binance USDⓈ-M futures, long + short ("Futures long + short"), TypeScript, new repo (https://github.com/aliercankonus/DailyBot), runs on the user's Hostinger VPS. Plus everything in `CLAUDE.md` (risk limits 2%/5x not to be raised, max 8 gates, strategy changes need a recorded backtest). Reply to the user in Turkish.
@@ -43,33 +44,36 @@ CONSTRAINTS (verbatim): Binance USDⓈ-M futures, long + short ("Futures long + 
 - `src/engine/engine.ts` — live engine supports trades strategies only; NO weight-strategy (G-LS) support yet.
 
 ## Current state
-- 2026-11-18 23:41 UTC: PHASE 2 CODE DEPLOYED (image dc6060e/cd01b8c, CI green). VPS 1955523, project `dailybot`, all containers healthy: `engine` (A-LV + time stop, 4h, 5 coins, db trader, API 127.0.0.1:8081), `engine-st` (st1d, 20 coins, db trader_st, API 8082), `engine-gls` (donchianls, daily rebalance after 00:00 UTC, db trader_gls, API 8083). Kill-switch drawdowns 35% / 25% / 40%. Each engine logs with a `[A]`/`[ST]`/`[GLS]` prefix (BOT_NAME).
-- First report (23:41 UTC): A 10000 -> 9991 (BNB and BTC short open with stops), ST and GLS flat at 10000, portfolio -0.03%, no deviation flags. GLS logged one REBALANCE_SKIPPED (first start at 23:12, the 18 Nov decision was too stale; expected).
-- Done since phase 1: account registry (engine_accounts, sha256 key fingerprint per engine; testnet/live refuses to start without REGISTRY_DATABASE_URL + BOT_NAME unless ALLOW_UNREGISTERED_ACCOUNT=1), per-engine BINANCE_BASE_URL (ST_/GLS_ prefixes), partial-fill retry, MAX_DRAWDOWN-trip and failed-close tests, paper-vs-backtest report (`src/cli/paperReport.ts`, `report` service, REPORT=1), guide baseline MA20/MA50 (`ma2050`, round 11: OOS PF 0.78, fails). Second /e2e-code-review findings fixed in bf8b0be.
-- Tests: 283, all pass with local Postgres.
-- Deploy: Hostinger MCP `vps_docker_create` {virtualMachineId 1955523, project_name "dailybot", content = docker-compose.vps.yml with comment lines stripped, environment = POSTGRES_PASSWORD + API_TOKEN + MODE=paper + RESEARCH=0 + REPORT=1}. LIMIT: `content` must be <= 8192 characters (HTTP 422 otherwise); the file uses anchors (x-universe, x-engine-common, x-api-common) and is ~7.7k stripped, so keep new services small or reuse anchors. `environment` replaces the whole project env, so both secrets must be sent every time. They are in the hPanel project env for `dailybot` (and were in the old session's scratchpad `vps-secrets.env`, gone in a new container). A new session must ask the user for them (never commit, never echo back). Logs: `vps_docker_logs` {virtualMachineId 1955523, projectName "dailybot"}; containers: `vps_docker_list`.
-- Report on demand: redeploy with REPORT=1 (the one-shot `report` service prints A/GLS/ST blocks + portfolio total at start), then read `report-1` in the logs. Post-mortem prompt appears every 30 closed trades per engine.
-- Research job: RESEARCH=1 runs `backtest.js` for each RESEARCH_STRATEGIES entry (add `--brief` in RESEARCH_ARGS) and `combo.js` for each RESEARCH_COMBO. Set RESEARCH=0 afterwards.
-- Local Postgres for tests: `su postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/tmp/te-pg/data -o '-p 55432 -k /var/tmp/te-pg -c listen_addresses=localhost' -l /var/tmp/te-pg/log start"`, then `TEST_DATABASE_URL=postgres://trader@localhost:55432/trader npm test` (recreate if the container is fresh).
-- Gotchas: the safety check false-positives on heredocs/python with `$$` (write edit scripts to the scratchpad, build `$$` as `'$' * 2`). Google Docs links are blocked (ask the user to paste text). The old repo URL redirects to aliercankonus/DailyBot; pushes still work.
+- 2026-11-19 08:32 UTC: ROUND 12 DEPLOYED (commit dc641bd, CI green, after /e2e-code-review REQUEST_CHANGES → fixed). Paper engines now trade BTC+ETH only, on NEW databases (old phase-1 history kept in trader / trader_st / trader_gls):
+  - service `engine` = A, `trendlv+timestop` 4h, db trader_a, paper 1150 USDT, risk 1%, kill switch 30%, API 127.0.0.1:8081
+  - service `engine-st` = GC, `gcross1h` (EMA50/200 on 1h), db trader_gc, paper 575 USDT, risk 1%, kill switch 50%, API 8082
+  - service `engine-gls` = TS, `tsmom4h` (long only), db trader_ts, paper 575 USDT, risk 1%, kill switch 25%, API 8083
+  Service names were kept on purpose (Hostinger cannot remove renamed services' old containers). Env prefixes for testnet/live keys: A none, GC_, TS_.
+- Why this portfolio (PROGRESS.md round 12): BTC/ETH data from data.binance.vision 2020-01 → 2026-11-18 (fapi.binance.com is geo-blocked from cloud sessions; environment `dailybot` allows data.binance.vision). 15m: nothing works; 1h: only golden cross; 4h: A-LV+timestop best (every year positive, Sharpe 1.15); 1d: G-LS strong but far above the 2% rule. Portfolio 0.5 A + 0.25 GC + 0.25 TS: CAGR 20.3%, Sharpe 1.18, max DD 15.2%, every year positive; from 2025 CAGR 19.7%. No parameters were tuned (published/pre-registered settings).
+- 2% rule for G-LS (user: "if you say 2 percent is good, do it"): done. `maxLegRisk` caps |w| x catastrophic stop (4 x ATR14, max 50%) at 2%; `donchianls2`; outside paper an uncapped weight strategy refuses to start (`validateEngineStrategy`, mode required). On 20 coins it costs little (Sharpe 0.93 → 0.89); on BTC/ETH it kills G-LS, so G-LS is not in the live plan. Known limit: the exchange stop is not re-placed between resizes (band 0.02).
+- Live plan: 2,000 EUR (~2,300 USDT assumed) split 1150/575/575 USDT, three Binance sub-accounts (one per engine). BTCUSDT minimum notional 100 USDT can make TS skip BTC entries in very volatile weeks.
+- Tests: 287, all pass with local Postgres. Typecheck clean.
+- Deploy: as before (`vps_docker_create`, content = compose without comment lines, must stay <= 8192 chars, now ~7.0k; environment = POSTGRES_PASSWORD + API_TOKEN + MODE=paper + RESEARCH=0 + REPORT=1; both secrets must be sent every time, they are in the hPanel project env; never commit or echo them).
+- Local research: `python3 -I bv_download.py <dir>` pattern (data.binance.vision monthly+daily zips → repo CSV format); `npx tsx src/cli/backtest.ts --strategy X --interval 4h --symbols BTCUSDT,ETHUSDT --dir <dir> --brief`; `npx tsx src/cli/combo.ts --legs "trendlv+timestop:0.5,gcross1h:0.25,tsmom4h:0.25" --symbols BTCUSDT,ETHUSDT --dir <dir>` (legs may be `name@1h`). Data lives in the session scratchpad (gone in a new container; re-download takes ~2 minutes).
+- Local Postgres for tests: `su postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/tmp/te-pg/data -o '-p 55432 -k /var/tmp/te-pg -c listen_addresses=localhost' -l /var/tmp/te-pg/log start"`, then `TEST_DATABASE_URL=postgres://trader@localhost:55432/trader npm test`.
+- Gotchas: safety check false-positives on `$$` in heredocs (write scripts to the scratchpad); Google Docs blocked; printing the secrets file is blocked by the auto-mode classifier (ask the user or use the hPanel env).
 - Fails: nothing known.
 
 ## Next steps (ordered)
-1. DONE 2026-11-19 00:40 UTC: first G-LS rebalance ran at 00:01 (17 shorts, gross ~80%; UNI/NEAR/AAVE flat), no tick failures; GLS ticks now ~12.5s (per-tick stop checks on 17 legs, fine at 60s TICK_SECONDS). ST processed the 19 Nov candle with no new Supertrend signal. Keep watching the logs daily for the first week.
-2. Paper period, 2-3 months, parameters FROZEN: weekly report (REPORT=1 redeploy), post-mortem at each engine's 30th trade, one versioned change at a time and validated on later data only. Stop rule: an engine beyond its backtest max drawdown or flagged deviations -> stop and investigate.
-3. Telegram alerts once the user gives TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (put them in the hPanel env and in the deploy `environment`).
-4. Testnet: one Binance sub-account + testnet keys per engine (hPanel env or request_credential, never chat), ST_/GLS_ MODE=testnet and BINANCE_BASE_URL; check the full order lifecycle (`BINANCE_STOP_API` auto|algo|legacy). The registry blocks reuse of one key across engines.
-5. Small live capital at 0.5% risk if paper holds up.
-6. Optional: dashboard reading the three APIs; A/Supertrend on more coins; portfolio-level vol target (new data only).
+1. Watch the three BTC/ETH paper engines daily for the first week (logs: `[A]`, `[GC]`, `[TS]` prefixes; report: redeploy with REPORT=1, read `report-1`). First trades depend on signals: A and TS on 4h closes, GC on 1h EMA50/200 crosses.
+2. Paper period 2-3 months, parameters FROZEN; post-mortem at each engine's 30th trade; stop rule: drawdown beyond the backtest max or flagged deviations.
+3. Telegram: user will send TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID → hPanel env + deploy `environment`.
+4. Testnet: user will send keys, one Binance sub-account per engine (A: BINANCE_*, GC: GC_BINANCE_*, TS: TS_BINANCE_*; plus *_MODE=testnet, *_BINANCE_BASE_URL). Via hPanel env or request_credential, never chat. Check the order lifecycle (`BINANCE_STOP_API` auto|algo|legacy).
+5. Live with 2,000 EUR split 50/25/25 if paper holds up.
+6. Optional: dashboard; more coins once capital grows (min notional); before any live G-LS, re-place stops when the cap changes.
 
 ## Suggested skills for the next agent
 - `/e2e-code-review` before merging anything under src/engine, src/exchange or src/risk (security reviewer mandatory); `/delegate` for larger builds (dashboard, report); `/context-handoff` at ~75% context.
 
 ## Open questions for user
-- G-LS and the 2% rule: today G-LS uses a 25%/yr vol target, gross <= 2x, 4-ATR catastrophic stop per leg; a per-leg 2% cap would change the tested strategy (needs a new backtest). Keep as is?
 - Telegram bot token/chat id for alerts? (optional)
 - When will Binance testnet keys (one per engine/sub-account) be available?
-- Capital size for the eventual small live test.
+- EUR/USDT rate at funding time (paper slices assume ~2,300 USDT for 2,000 EUR).
 
 ## Probes
 - What is the recommended portfolio and its backtest numbers? (⅓ st1d + ⅓ trendlv+timestop + ⅓ donchianls; every year positive 2020–26, CAGR 18.5%, Sharpe 1.04, DD 18.6%, from-2025 Sharpe 0.68.)
