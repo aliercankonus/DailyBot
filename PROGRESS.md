@@ -407,6 +407,15 @@ Finding: all three lower returns; the earlier the exit reacts, the worse (EMA50 
 Owner: "we have no profit protection; protect without cutting the trade". GC had zero paper trades, so changing it now does not contaminate the paper record. GC live strategy: `gcross1h` → `gcross1h+be2` (stop to entry + 0.2% once MFE >= 2R; exits otherwise unchanged). Backtest all data: 574 trades, win 20%, PF 1.44, E 0.41R, avg win 5.11R, CAGR 26.8%, Sharpe 0.90, max DD 25.7% (was 37.7%); OOS PF 1.47 (was 1.48). Paper expectations (paperStats GC) updated to these numbers.
 TS + be2: no effect (IS PF 2.22 → 2.26, OOS identical 1.51, max DD identical 13.1%; 1.6R / 2.4R the same) because TS's losers almost never reach 2R (2 of 17 trades in the 2-3R bucket lost) and its score exit already protects. TS unchanged.
 
+### 2026-11-19 — Round 18: decide every 15 minutes on the forming 4h candle? (user question)
+Harness `src/strategy/intrabar.ts`: A-LV + time stop on 15m candles (data.binance.vision 2020-01 → 2026-11-18), stops/exits updated only at 4h closes in both variants, so only entry timing differs. `trendlv15c` = entries at 4h closes (control); `trendlv15i` = entries at every 15m close on the forming 4h candle.
+
+| | trades | IS PF | OOS PF | OOS E | fees+funding | CAGR | Sharpe | max DD | losing years |
+|---|---|---|---|---|---|---|---|---|---|
+| wait for the 4h close (control) | 477 | 1.66 | 1.47 | 0.300R | 4,350 | 21.5% | 1.23 | 19.4% | none |
+| every 15 min, forming candle | 606 | 1.41 | 1.54 | 0.325R | 5,616 | 21.9% | 1.14 | 18.2% | 2022 (−3.2%) |
+Finding: deciding on the forming candle adds 27% more trades (breakouts that do not hold to the close) and 29% more costs; in sample PF falls 1.66 → 1.41, Sharpe 1.23 → 1.14 and 2022 turns negative; the OOS gain (PF 1.47 → 1.54) is the out-of-sample-only pattern again. NOT ADOPTED: the live engine keeps deciding at closed candles. (The control on 15m data is close to the 4h backtest, Sharpe 1.23 vs 1.17: the harness is sound.)
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
