@@ -22,7 +22,9 @@ const safeEqual = (a: string, b: string) => {
 export function buildDashboard(opts: DashboardOptions) {
   if (opts.password.length < 12) throw new Error("DASHBOARD_PASSWORD must be at least 12 characters");
   const now = opts.now ?? Date.now;
-  const app = Fastify({ logger: false, trustProxy: true });
+  // One trusted hop (traefik): req.ip is the address traefik appended, not a client-supplied
+  // X-Forwarded-For entry, so the failed-auth lockout cannot be dodged by spoofing the header.
+  const app = Fastify({ logger: false, trustProxy: (_addr: string, hop: number) => hop < 1 });
   const limiter = authFailureLimiter(now);
   const expected = `Basic ${Buffer.from(`${opts.user}:${opts.password}`).toString("base64")}`;
 
@@ -49,7 +51,11 @@ export function buildDashboard(opts: DashboardOptions) {
     const t = now();
     const [prices, ...engines] = await Promise.all([
       opts.prices(t),
-      ...opts.engines.map((e) => engineSnapshot(e, t).catch((err) => ({ key: e.key, label: e.label, error: err instanceof Error ? err.message : String(err) }))),
+      ...opts.engines.map((e) => engineSnapshot(e, t).catch((err) => {
+        // Details (host names, roles) stay in the server log; the client gets a generic message.
+        console.error(JSON.stringify({ level: "error", msg: "dashboard snapshot failed", engine: e.key, error: err instanceof Error ? err.message : String(err) }));
+        return { key: e.key, label: e.label, error: "veri alınamadı (sunucu loguna bakın)" };
+      })),
     ]);
     return { generatedAt: t, prices, engines };
   });

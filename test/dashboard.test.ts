@@ -47,3 +47,20 @@ describe("dashboard data helpers", () => {
     expect(await bad(1)).toEqual({});
   });
 });
+
+describe("dashboard hardening", () => {
+  it("a spoofed X-Forwarded-For does not reset the lockout (one trusted hop)", async () => {
+    const a = app();
+    for (let i = 0; i < 10; i++) {
+      await a.inject({ url: "/", remoteAddress: "10.0.0.2", headers: { "x-forwarded-for": `1.2.3.${i}, 9.9.9.9`, authorization: basic("admin", "nope-nope-nope") } });
+    }
+    const r = await a.inject({ url: "/", remoteAddress: "10.0.0.2", headers: { "x-forwarded-for": "5.5.5.5, 9.9.9.9", authorization: basic("admin", "correct-horse-battery") } });
+    expect(r.statusCode).toBe(429);
+  });
+  it("hides database error details from the client", async () => {
+    const pool = { query: async () => { throw new Error("connect ECONNREFUSED db:5432"); } } as never;
+    const a = buildDashboard({ engines: [{ key: "A", label: "A", mode: "paper", strategy: "x", exitRule: "y", pool }], user: "admin", password: "correct-horse-battery", prices: async () => ({}) });
+    const r = await a.inject({ url: "/api/overview", headers: { authorization: basic("admin", "correct-horse-battery") } });
+    expect(JSON.stringify(r.json())).not.toContain("ECONNREFUSED");
+  });
+});
