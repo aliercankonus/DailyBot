@@ -68,3 +68,20 @@ CREATE TABLE IF NOT EXISTS engine_accounts (
 );
 -- Added after the first version of the table (idempotent upgrade).
 ALTER TABLE engine_accounts ADD COLUMN IF NOT EXISTS instance TEXT NOT NULL DEFAULT '';
+
+-- Binance USD-M forced liquidations (public !forceOrder stream: at most the largest one per symbol
+-- per second, so a lower bound of real activity). Collected by src/cli/liquidations.ts for research.
+CREATE TABLE IF NOT EXISTS liquidations (
+  id           BIGSERIAL PRIMARY KEY,
+  symbol       TEXT NOT NULL,
+  side         TEXT NOT NULL CHECK (side IN ('BUY','SELL')),   -- SELL = a long was liquidated
+  price        DOUBLE PRECISION NOT NULL,
+  avg_price    DOUBLE PRECISION NOT NULL,
+  quantity     DOUBLE PRECISION NOT NULL,
+  notional     DOUBLE PRECISION NOT NULL,                       -- avg_price x filled quantity, USDT
+  status       TEXT NOT NULL,
+  trade_time   BIGINT NOT NULL,
+  received_at  BIGINT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS liquidations_dedupe ON liquidations (symbol, trade_time, side, quantity, price);
+CREATE INDEX IF NOT EXISTS liquidations_time ON liquidations (trade_time);

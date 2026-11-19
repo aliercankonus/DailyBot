@@ -205,6 +205,25 @@ services:
       migrate: { condition: service_completed_successfully }
     restart: "no"
 
+  # Research data: Binance USD-M forced liquidations for BTC/ETH (public stream, no key) into the
+  # main database, for the liquidation-cascade test (PROGRESS.md). Never trades.
+  liquidations:
+    <<: *node
+    command: ["node", "dist/cli/liquidations.js"]
+    environment:
+      DATABASE_URL: *dburl
+      LIQ_SYMBOLS: BTCUSDT,ETHUSDT
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    mem_limit: 128m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "const s=require('fs').statSync('/tmp/collector-heartbeat');process.exit(Date.now()-s.mtimeMs<300000?0:1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 3m
+
   # Operations dashboard (read-only; HTTP Basic auth when DASHBOARD_PASSWORD is set, open when empty) for all engines, served over HTTPS by the
   # traefik project (Let's Encrypt) at DASHBOARD_HOST; also on 127.0.0.1:8090 for an SSH tunnel.
   dashboard:
