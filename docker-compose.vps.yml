@@ -23,9 +23,6 @@ x-node: &node
     driver: json-file
     options: { max-size: "10m", max-file: "3" }
 
-# The 20-coin universe of the daily strategies (and the research downloads).
-x-universe: &universe BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,DOGEUSDT,AVAXUSDT,LINKUSDT,DOTUSDT,LTCUSDT,BCHUSDT,TRXUSDT,ATOMUSDT,ETCUSDT,XLMUSDT,FILUSDT,UNIUSDT,NEARUSDT,AAVEUSDT
-
 x-db-url: &dburl postgres://trader:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/trader
 # A_DB: engine A database (set A_DB=trader_a_testnet for testnet so paper state such as the equity peak does not carry over).
 x-db-a: &db_a postgres://trader:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/${A_DB:-trader_a}
@@ -115,6 +112,7 @@ services:
     environment:
       <<: *engine_env
       BOT_NAME: A
+      HEALTHCHECK_URL: ${A_HEALTHCHECK_URL:-}
       MODE: ${MODE:-paper}
       CONFIRM_LIVE: ${CONFIRM_LIVE:-}
       BINANCE_API_KEY: ${BINANCE_API_KEY:-}
@@ -132,6 +130,7 @@ services:
     environment:
       <<: *engine_env
       BOT_NAME: GC
+      HEALTHCHECK_URL: ${GC_HEALTHCHECK_URL:-}
       MODE: ${GC_MODE:-paper}
       CONFIRM_LIVE: ${GC_CONFIRM_LIVE:-}
       BINANCE_API_KEY: ${GC_BINANCE_API_KEY:-}
@@ -149,6 +148,7 @@ services:
     environment:
       <<: *engine_env
       BOT_NAME: TS
+      HEALTHCHECK_URL: ${TS_HEALTHCHECK_URL:-}
       MODE: ${TS_MODE:-paper}
       CONFIRM_LIVE: ${TS_CONFIRM_LIVE:-}
       BINANCE_API_KEY: ${TS_BINANCE_API_KEY:-}
@@ -205,51 +205,33 @@ services:
       migrate: { condition: service_completed_successfully }
     restart: "no"
 
-  # Opt-in research job: set RESEARCH=1 in the project environment, then update the project.
-  # It downloads 4h/1h candles (5 coins), 1d candles and funding history (20 coins) from 2021,
-  # prints a backtest report per strategy to its logs
-  # then the RESEARCH_COMBO portfolios (RESEARCH_STRATEGIES=none skips single runs),
-  # and exits 0 if at least one strategy passed the acceptance gate, 2 otherwise. With RESEARCH unset it logs "research skipped" and exits 0.
-  research:
-    <<: *node
+  # Operations dashboard (read-only, HTTP Basic auth) for all engines, served over HTTPS by the
+  # traefik project (Let's Encrypt) at DASHBOARD_HOST; also on 127.0.0.1:8090 for an SSH tunnel.
+  dashboard:
+    <<: [*node, *api_common]
+    command: ["node", "dist/cli/dashboard.js"]
     environment:
-      RESEARCH: ${RESEARCH:-0}
-      RESEARCH_STRATEGIES: ${RESEARCH_STRATEGIES:-donchian carry tsmom xsmom btchold ewhold}
-      RESEARCH_ARGS: ${RESEARCH_ARGS:-}
-      # Space-separated portfolios of comma-separated name:weight legs, e.g. "trend:0.5,donchianls:0.5".
-      RESEARCH_COMBO: ${RESEARCH_COMBO:-}
-      RESEARCH_UNIVERSE: *universe
-    command:
-      - sh
-      - -c
-      - >-
-        if [ "$${RESEARCH}" != "1" ]; then echo "research skipped (set RESEARCH=1 to run)"; exit 0; fi;
-        U=$${RESEARCH_UNIVERSE};
-        node dist/cli/download.js --interval 4h --from 2021-01-01 --dir /data &&
-        node dist/cli/download.js --interval 1h --from 2021-01-01 --dir /data &&
-        node dist/cli/download.js --interval 1d --from 2020-01-01 --dir /data --symbols $$U &&
-        node dist/cli/download.js --funding --from 2020-01-01 --dir /data --symbols $$U || exit 1;
-        best=2;
-        for s in $${RESEARCH_STRATEGIES}; do
-          if [ "$$s" = "none" ]; then continue; fi;
-          echo "==================== strategy $$s ====================";
-          node dist/cli/backtest.js --strategy $$s --split 2025-01-01 --dir /data --robustness $${RESEARCH_ARGS};
-          rc=$$?; echo "strategy $$s finished with exit code $$rc";
-          if [ $$rc -eq 0 ]; then best=0; fi;
-        done;
-        for c in $${RESEARCH_COMBO}; do
-          echo "==================== portfolio $$c ====================";
-          node dist/cli/combo.js --legs $$c --split 2025-01-01 --dir /data;
-        done;
-        echo "research finished with exit code $$best (0 = at least one strategy passed)"; exit $$best
-    volumes:
-      - research:/data
-    mem_limit: 768m
-    cpus: 0.75
-    restart: "no"
+      DASHBOARD_USER: ${DASHBOARD_USER:-admin}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:?set DASHBOARD_PASSWORD}
+      DASH_DB_A: *db_a
+      DASH_DB_GC: *db_gc
+      DASH_DB_TS: *db_ts
+      DASH_MODE_A: ${MODE:-paper}
+      DASH_MODE_GC: ${GC_MODE:-paper}
+      DASH_MODE_TS: ${TS_MODE:-paper}
+      DASH_STRATEGY_A: trendlv+timestop
+      DASH_STRATEGY_GC: gcross1h+be2
+      DASH_STRATEGY_TS: tsmom4h
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.dailybot.rule=Host(`${DASHBOARD_HOST:-srv1955523.hstgr.cloud}`)
+      - traefik.http.routers.dailybot.entrypoints=websecure
+      - traefik.http.routers.dailybot.tls.certresolver=letsencrypt
+      - traefik.http.services.dailybot.loadbalancer.server.port=8080
+    ports:
+      - "127.0.0.1:8090:8080"
 
-  # Opt-in paper-vs-backtest report: set REPORT=1 and update the project; it prints one block per
-  # engine (equity, drawdown, trades, PF, R, errors, kill switch, deviations from the backtest).
+  # Research runs in Claude sessions on the data.binance.vision archive (PROGRESS.md), not on the VPS.
   report:
     <<: *node
     environment:
@@ -270,4 +252,3 @@ services:
 
 volumes:
   pgdata:
-  research:

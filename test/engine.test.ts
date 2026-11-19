@@ -101,6 +101,19 @@ describe("engine entry", () => {
   });
 });
 
+describe("decision log", () => {
+  it("stores why a closed candle gave no entry (gate NO_SIGNAL), once per candle", async () => {
+    at(signalIdx - 3);
+    await engine.tick();
+    ex.now += 60_000;
+    await engine.tick(); // same candle: no second row
+    const rows = repo.signals.filter((s) => s.gate === "NO_SIGNAL");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.side).toBeNull();
+    expect(rows[0]!.detail).toMatch(/trend|warming/);
+  });
+});
+
 describe("engine management", () => {
   it("trails the stop: places the new one, then cancels the old one", async () => {
     at(signalIdx);

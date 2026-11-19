@@ -296,7 +296,8 @@ export class Engine {
       }
     }
     if (!signal && strategy.explain) {
-      // Diagnostics only: why this closed candle gave no entry (once per candle, logs only).
+      // Diagnostics only: why this closed candle gave no entry (once per candle). Logged and stored
+      // in the signals table (gate NO_SIGNAL) for the dashboard; a storage failure must not stop the tick.
       let why: string;
       try {
         why = strategy.explain(candles);
@@ -304,6 +305,8 @@ export class Engine {
         why = `explain failed: ${errMsg(e)}`;
       }
       console.log(JSON.stringify({ level: "info", msg: "no signal", symbol, candle: new Date(last.openTime).toISOString(), why, time: new Date(this.now()).toISOString() }));
+      await repo.recordSignal({ symbol, candleOpenTime: last.openTime, side: null, accepted: false, gate: "NO_SIGNAL", detail: why, createdAt: this.now() })
+        .catch((e) => console.error(JSON.stringify({ level: "error", msg: "no-signal record failed", symbol, error: errMsg(e) })));
     }
     if (gate.ok && signal) {
       // Throws on transient failure: lastProcessed is NOT advanced, so the next tick retries

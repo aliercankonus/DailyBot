@@ -42,6 +42,8 @@ const Env = z.object({
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_CHAT_ID: z.string().optional(),
   TICK_SECONDS: z.coerce.number().int().min(15).default(60),
+  /** Dead man's switch (e.g. healthchecks.io): pinged after a successful tick, at most every 5 minutes. */
+  HEALTHCHECK_URL: z.string().url().refine((u) => u.startsWith("https://"), "HEALTHCHECK_URL must be https").optional(),
 });
 
 /**

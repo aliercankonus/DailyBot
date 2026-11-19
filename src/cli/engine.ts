@@ -20,7 +20,7 @@ const STARTUP_FAILURE_DELAY_MS = 30_000;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
-const log = (level: "info" | "error" | "fatal", msg: string, extra: Record<string, unknown> = {}) =>
+const log = (level: "info" | "warn" | "error" | "fatal", msg: string, extra: Record<string, unknown> = {}) =>
   (level === "info" ? console.log : console.error)(JSON.stringify({ level, msg, ...extra, time: new Date().toISOString() }));
 function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
   let t: NodeJS.Timeout | undefined;
@@ -104,6 +104,20 @@ async function shutdown(sig: string) {
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
 
+/** External dead man's switch: a missed ping (engine or VPS down) makes the monitoring service alert. */
+const HEALTHCHECK_EVERY_MS = 5 * 60_000;
+let lastPing = 0;
+async function pingHealthcheck() {
+  if (!cfg.HEALTHCHECK_URL || Date.now() - lastPing < HEALTHCHECK_EVERY_MS) return;
+  lastPing = Date.now();
+  try {
+    const res = await fetch(cfg.HEALTHCHECK_URL, { method: "POST", body: `tick ok ${cfg.MODE}`, signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) log("warn", "healthcheck ping failed", { status: res.status });
+  } catch (e) {
+    log("warn", "healthcheck ping failed", { error: e instanceof Error ? e.name : "error" });
+  }
+}
+
 async function tick(engine: { tick(): Promise<void> }) {
   if (running || stopping) return;
   running = true;
@@ -132,6 +146,7 @@ async function tick(engine: { tick(): Promise<void> }) {
     if (ok && persisted) {
       await writeFile(HEARTBEAT_FILE, String(Date.now())).catch((e) => log("error", "heartbeat write failed", { error: errMsg(e) }));
       log("info", "tick", { ms: Date.now() - t0, mode: cfg.MODE });
+      await pingHealthcheck();
     }
     running = false;
   }
