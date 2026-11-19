@@ -60,6 +60,11 @@ export function getCatalogEntry(name: string): CatalogEntry {
     return weightsEntry("G-LS", { ...DEFAULT_DONCHIAN_ENSEMBLE, allowShort: 1 }, ["volLookback"], ["allowShort"],
       (p) => createDonchianEnsemble({ ...DEFAULT_DONCHIAN_ENSEMBLE, ...p, allowShort: 1 }));
   }
+  if (name === "donchianls2") {
+    // G-LS with the 2% rule per leg: a hit catastrophic stop (4 x ATR14) loses at most 2% of equity.
+    return weightsEntry("G-LS-2%", { ...DEFAULT_DONCHIAN_ENSEMBLE, allowShort: 1, maxLegRisk: 0.02 }, ["volLookback"], ["allowShort", "maxLegRisk"],
+      (p) => createDonchianEnsemble({ ...DEFAULT_DONCHIAN_ENSEMBLE, ...p, allowShort: 1 }));
+  }
   if (name === "carry") {
     return weightsEntry("H", { ...DEFAULT_FUNDING_CARRY }, ["lookbackDays", "rebalanceEvery"], [],
       (p) => createFundingCarry({ ...DEFAULT_FUNDING_CARRY, ...p }), true);
@@ -109,4 +114,4 @@ export function getCatalogEntry(name: string): CatalogEntry {
   };
 }
 
-export const CATALOG_NAMES = [...STRATEGY_NAMES, "xsmom", "donchian", "donchianls", "carry", "btchold", "ewhold", "ethbtcmr", "altbtcmr", "altbtctrend"];
+export const CATALOG_NAMES = [...STRATEGY_NAMES, "xsmom", "donchian", "donchianls", "donchianls2", "carry", "btchold", "ewhold", "ethbtcmr", "altbtcmr", "altbtctrend"];

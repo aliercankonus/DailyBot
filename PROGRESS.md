@@ -7,6 +7,7 @@ Binance USDⓈ-M futures bot (long + short) with a proven out-of-sample edge, ru
 - 2026-11-17: Rewrite instead of repairing `dailytradingbot` (see `docs/legacy-review.md`).
 - 2026-11-17: TypeScript + Postgres + Docker Compose on the VPS; Lovable/Supabase dropped.
 - 2026-11-17: Futures, long + short, isolated margin, one-way mode. Max 5x leverage, max 2% risk/trade enforced in config.
+- 2026-11-19: Focus on BTC + ETH (user). Portfolio 0.5 A-LV+timestop 4h + 0.25 golden cross 1h + 0.25 tsmom 4h (round 12). Live start capital 2,000 EUR. 2% rule applies to weight legs too (enforced outside paper).
 - 2026-11-17: First candidate strategy: 4h trend breakout (Donchian 20, EMA 50/200, ATR 14, stop 2 ATR, trail 3 ATR).
 - 2026-11-17: Stop orders: both Binance Algo Order API and legacy `/fapi/v1/order` implemented behind `BINANCE_STOP_API`; which one works must be confirmed on testnet (Binance docs were not reachable from the build environment).
 
@@ -304,6 +305,40 @@ MA20 > MA50 long-only on BTCUSDT 1h (enter on the cross up, exit on the cross do
 | 421 / 1.00 | 188 / 0.78 | −0.09R | 25.5% | −3.6% | −0.15 | 31.0% | −7.0 −18.0 +16.3 +12.0 −15.0 −4.4 |
 
 Finding: as expected, no edge after costs (about 100 switches a year; fees+funding ≈ 2,600 USDT over the period on 10k). The guide's useful part is its process (one versioned change at a time, validation on later data, post-mortem after N paper trades), which is now in the paper report (post-mortem notice every 30 closed trades).
+
+### 2026-11-19 — Round 12: BTC + ETH only, every timeframe (local, data.binance.vision archive 2020-01 → 2026-11-18)
+User request: focus on BTC and ETH, best result per timeframe, start with 2,000 EUR. Data: Binance public archive (candles 15m/1h/4h/1d + funding), same costs (0.05% taker + 0.05% slippage per side, historical funding), split 2025-01-01. No parameters were tuned: published/pre-registered settings only, so the selection bias is the choice among 23 strategies x 4 timeframes.
+
+Screen (23 strategies x 15m/1h/4h/1d, `--brief`, best per timeframe, full-period equity view):
+| Timeframe | Best | IS PF | OOS PF | CAGR | Sharpe | Max DD | Note |
+|---|---|---|---|---|---|---|---|
+| 15m | none | | | | | | every strategy loses to costs (e.g. capitulation −42%/yr) |
+| 1h | golden cross EMA50/200 (`gcross1h`) | 1.37 | 1.61 | 25.9% | 0.87 | 39.4% | the only 1h strategy positive in both periods; 2021 −13.5% |
+| 4h | A-LV + time stop (`trendlv+timestop`) | 1.58 | 1.40 | 19.8% | 1.15 | 18.9% | positive every year 2020-2026; ±20% robust (only trailAtr 2.4 drops to PF 1.04) |
+| 4h | tsmom on 4h bars (`tsmom4h`) | 2.08 | 1.58 | 12.6% | 1.01 | 14.6% | long only, ±20% robust |
+| 1d | G-LS (`donchianls`) | | | 25.8% | 0.90 | 44.2% | OOS Sharpe 1.06, robust, but legs far above the 2% rule |
+(trade strategies at 1% risk of their own capital; Supertrend daily on BTC/ETH only Sharpe 0.59)
+
+2% rule for G-LS (new `maxLegRisk`: |weight| x catastrophic-stop distance <= 2% of equity, `donchianls2`):
+| | Full CAGR | Sharpe | Max DD | OOS Sharpe |
+|---|---|---|---|---|
+| G-LS BTC/ETH uncapped | 25.8% | 0.90 | 44.2% | 1.06 |
+| G-LS BTC/ETH capped 2% | 7.3% | 0.73 | 14.0% | 0.09 |
+| G-LS 20 coins uncapped | 25.7% | 0.93 | 32.6% | 0.34 |
+| G-LS 20 coins capped 2% | 23.7% | 0.89 | 30.4% | 0.40 |
+Decision: the 2% rule is kept and now enforced in code: outside paper mode a weight strategy must cap each leg at 2% (`validateEngineStrategy`), so live G-LS can only be `donchianls2`. On BTC/ETH the cap leaves G-LS with almost nothing, so G-LS is not in the BTC/ETH portfolio.
+
+Portfolios (combo CLI, daily rebalanced, BTC/ETH, legs correlated 0.54-0.60):
+| Weights | Full CAGR | Sharpe | Max DD | From 2025 CAGR / DD | Yearly |
+|---|---|---|---|---|---|
+| A-LV+timestop alone | 19.8% | 1.15 | 18.9% | 17.4% / 18.9% | +52.4 +7.5 +9.1 +27.9 +12.2 +17.4 +15.0 |
+| **0.5 A + 0.25 gcross1h + 0.25 tsmom4h** | **20.3%** | **1.18** | **15.2%** | **19.7% / 15.2%** | +61.1 +1.9 +3.8 +30.1 +15.2 +12.4 +24.7 |
+| 0.4 / 0.3 / 0.3 | 20.4% | 1.15 | 15.9% | 20.1% / 14.4% | +62.6 +0.7 +2.8 +30.5 +15.7 +11.4 +26.6 |
+| 0.34 A + 0.33 gcross1h + 0.33 G-LS-2% | 13.9% | 1.12 | 12.7% | 12.2% / 12.7% | |
+| 0.5 A + 0.5 G-LS (uncapped, not allowed live) | 23.7% | 1.11 | 23.7% | 26.0% / 16.0% | |
+
+**Chosen for paper → live (2,000 EUR ≈ 2,300 USDT):** 0.5 A (4h) + 0.25 GC (golden cross 1h) + 0.25 TS (tsmom 4h), BTC+ETH, each engine 1% risk of its own slice (≈ 0.5% / 0.25% / 0.25% of total capital per trade). Paper engines retargeted on 2026-11-19 with the live slice sizes (1150 / 575 / 575 USDT) so minimum notionals behave as live (BTCUSDT minimum 100 USDT: TS on BTC can be skipped in very volatile weeks). Caveats: legs are correlated (one market, two coins), 2021-2022 were nearly flat, and these are backtests (selection among 92 runs).
+Review (/e2e-code-review, REQUEST_CHANGES → fixed): guard `mode` is now required (compiler enforces cfg.MODE), guard tests added (uncapped `donchian`/`donchianls` rejected on testnet/live), ATR <= 0 no longer gives an infinite cap, `maxLegRisk` is excluded from the robustness sweep, combo rejects bad intervals/empty legs, test that every compose BOT_NAME has an expectation. Known limit before G-LS goes live: the exchange stop is re-placed only when the position size changes and the 0.02 band can skip small resizes, so a leg's risk can drift above 2% between resizes (by at most the band, ~2% of equity in notional); G-LS is not in the BTC/ETH live plan.
 
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.

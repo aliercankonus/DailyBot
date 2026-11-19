@@ -32,7 +32,7 @@ const cfg = loadConfig(process.env, "engine");
 // Fail fast on a bad STRATEGY, before taking the lock or creating an exchange client. Wait before
 // exiting so `restart: unless-stopped` does not turn a config error into a tight crash loop.
 try {
-  validateEngineStrategy(cfg.STRATEGY, cfg.MAX_LEVERAGE, (n) => getStrategy(n));
+  validateEngineStrategy(cfg.STRATEGY, cfg.MAX_LEVERAGE, (n) => getStrategy(n), cfg.MODE);
 } catch (e) {
   console.error(JSON.stringify({ level: "fatal", msg: "invalid STRATEGY configuration", error: e instanceof Error ? e.message : String(e), time: new Date().toISOString() }));
   await new Promise((r) => setTimeout(r, 30_000));

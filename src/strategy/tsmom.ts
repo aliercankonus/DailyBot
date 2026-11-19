@@ -41,11 +41,13 @@ export function tsmomScore(candles: Candle[]): number | null {
   return sum / TSMOM_LOOKBACKS.length;
 }
 
-export function createTsmom(p: TsmomParams = DEFAULT_TSMOM): Strategy {
+/** On other intervals the lookbacks count bars of that interval (4h: 5 bars = 20 hours). */
+export function createTsmom(p: TsmomParams = DEFAULT_TSMOM, interval: "4h" | "1d" = "1d"): Strategy {
   const warmup = TSMOM_LOOKBACKS.at(-1)! + 2;
+  const unit = interval === "1d" ? "d" : ` bars ${interval}`;
   return {
-    name: `tsmom(${TSMOM_LOOKBACKS.join("/")}d, in ${p.entryScore} out ${p.exitScore}, atr x${p.stopAtr}${p.allowShort ? ", long+short" : ", long only"})`,
-    interval: "1d",
+    name: `tsmom(${TSMOM_LOOKBACKS.join("/")}${unit}, in ${p.entryScore} out ${p.exitScore}, atr x${p.stopAtr}${p.allowShort ? ", long+short" : ", long only"})`,
+    interval,
     warmup,
 
     evaluate(symbol: string, candles: Candle[]): Signal | null {

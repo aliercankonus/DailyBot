@@ -19,6 +19,8 @@ export interface WeightStrategy {
   readonly rebalanceEvery: number;
   /** Largest total |weight| the strategy can ask for (the live engine refuses MAX_LEVERAGE below it). */
   readonly maxGross?: number;
+  /** Largest loss per leg (fraction of equity) if the engine's catastrophic stop is hit; undefined = uncapped. */
+  readonly maxLegRisk?: number;
   /**
    * Target weights decided at the CLOSE of each bar, keyed by that bar's openTime.
    * The weight for time t may only use candles with openTime <= t and funding with time <= t's close;

@@ -210,9 +210,9 @@ export function createTurtle55(): Strategy {
 }
 
 /** P9 Golden / death cross EMA 50/200 daily, always in the market; 3 ATR catastrophic stop. */
-export function createGoldenCross(): Strategy {
+export function createGoldenCross(interval: "1h" | "4h" | "1d" = "1d"): Strategy {
   return {
-    name: "golden-cross(ema50/200) 1d", interval: "1d", warmup: 210,
+    name: `golden-cross(ema50/200) ${interval}`, interval, warmup: 210,
     evaluate(symbol, candles) {
       const i = candles.length - 1;
       if (i < this.warmup) return null;

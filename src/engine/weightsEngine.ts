@@ -27,6 +27,7 @@ import { closingSide, type Exchange, type StopOrder } from "../exchange/types.js
 import type { Notifier } from "../notify/notifier.js";
 import { floorToStep, roundToStep } from "../risk/precision.js";
 import type { WeightStrategy } from "../strategy/weights.js";
+import { CATASTROPHIC_ATR, CATASTROPHIC_ATR_PERIOD } from "../strategy/donchianEnsemble.js";
 import { clientId } from "./engine.js";
 
 export interface WeightsEngineConfig {
@@ -44,7 +45,7 @@ export interface WeightsEngineConfig {
 }
 
 export const DEFAULT_WEIGHTS_ENGINE: Omit<WeightsEngineConfig, "symbols" | "maxLeverage" | "maxDrawdown"> = {
-  band: 0.02, catastrophicAtr: 4, maxDecisionDelayMs: 3 * 3_600_000, waitForDataMs: 30 * 60_000, history: 1000,
+  band: 0.02, catastrophicAtr: CATASTROPHIC_ATR, maxDecisionDelayMs: 3 * 3_600_000, waitForDataMs: 30 * 60_000, history: 1000,
 };
 
 export interface WeightsEngineDeps {
@@ -136,7 +137,7 @@ export class WeightsEngine {
     for (const s of Object.keys(candles)) {
       const c = candles[s]!;
       const price = c.at(-1)!.close;
-      const a = atr(c, 14).at(-1)!;
+      const a = atr(c, CATASTROPHIC_ATR_PERIOD).at(-1)!;
       if (Number.isFinite(a) && a > 0) refs[s] = { price, atr: a };
       legs.push({ symbol: s, cur: signedQty(await ex.getPosition(s)), target: ((w[s] ?? 0) * equity) / price, price });
     }

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { deviations, EXPECTATIONS, paperStats, postMortemDue } from "../src/report/paperStats.js";
 
@@ -38,5 +39,20 @@ describe("paper stats", () => {
     expect(f.join(" ")).toMatch(/profit factor/);
     expect(postMortemDue(30)).toBe(true);
     expect(postMortemDue(31)).toBe(false);
+  });
+});
+
+describe("expectations cover the deployed engines", () => {
+  it("every BOT_NAME in docker-compose.vps.yml has a finite backtest expectation", () => {
+    const names = [...readFileSync("docker-compose.vps.yml", "utf8").matchAll(/^\s+BOT_NAME: (\w+)$/gm)].map((m) => m[1]!);
+    expect(names).toEqual(["A", "GC", "TS"]);
+    for (const n of names) {
+      const e = EXPECTATIONS[n]!;
+      expect(e).toBeDefined();
+      for (const v of [e.tradesPer30d, e.winRate, e.profitFactor, e.avgR, e.annualVol, e.maxDrawdown]) {
+        expect(Number.isFinite(v)).toBe(true);
+        expect(v!).toBeGreaterThan(0);
+      }
+    }
   });
 });

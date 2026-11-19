@@ -10,6 +10,7 @@
 //  * Long only by default (the paper is long only); allowShort mirrors the rules for shorts.
 // Live note: the exits are close-based. Live trading would add a wide exchange-side catastrophic stop.
 import type { Candle } from "../core/types.js";
+import { atr } from "../core/indicators.js";
 import { realizedVol, type WeightInputs, type WeightStrategy } from "./weights.js";
 
 export const DONCHIAN_LOOKBACKS = [5, 10, 20, 30, 60, 90, 150, 250, 360] as const;
@@ -21,7 +22,17 @@ export interface DonchianEnsembleParams {
   volLookback: number;
   maxGross: number;
   allowShort: number; // 0 | 1
+  /**
+   * Largest loss per leg, as a fraction of equity, if the live engine's catastrophic stop
+   * (CATASTROPHIC_ATR x ATR14, at most 50% of price) is hit: |w| <= maxLegRisk / stopDistance.
+   * 0 = off (the published strategy). 0.02 applies the project's 2% per-trade rule to each leg.
+   */
+  maxLegRisk?: number;
 }
+
+/** Must match WeightsEngine catastrophicAtr / ATR period, so the cap describes the real stop. */
+export const CATASTROPHIC_ATR = 4;
+export const CATASTROPHIC_ATR_PERIOD = 14;
 
 export const DEFAULT_DONCHIAN_ENSEMBLE: DonchianEnsembleParams = {
   volTarget: 0.25,
@@ -77,10 +88,11 @@ export function ensembleFraction(closes: number[], allowShort: boolean): number[
 
 export function createDonchianEnsemble(p: DonchianEnsembleParams = DEFAULT_DONCHIAN_ENSEMBLE): WeightStrategy {
   return {
-    name: `donchian-ensemble(${DONCHIAN_LOOKBACKS.join("/")}d, vol ${p.volTarget} over ${p.volLookback}d, gross<=${p.maxGross}${p.allowShort ? ", long+short" : ", long only"})`,
+    name: `donchian-ensemble(${DONCHIAN_LOOKBACKS.join("/")}d, vol ${p.volTarget} over ${p.volLookback}d, gross<=${p.maxGross}${p.allowShort ? ", long+short" : ", long only"}${p.maxLegRisk ? `, leg risk<=${p.maxLegRisk * 100}%` : ""})`,
     interval: "1d",
     rebalanceEvery: 1,
     maxGross: p.maxGross,
+    ...(p.maxLegRisk ? { maxLegRisk: p.maxLegRisk } : {}),
 
     weightSeries({ candles }: WeightInputs) {
       const symbols = Object.keys(candles);
@@ -88,16 +100,23 @@ export function createDonchianEnsemble(p: DonchianEnsembleParams = DEFAULT_DONCH
       // 1) Risk-parity raw weights: ensemble fraction / coin volatility (equal risk per coin).
       const raw = new Map<number, Record<string, number>>();
       const closeAt = new Map<number, Record<string, number>>();
+      const stopAt = new Map<number, Record<string, number>>();
       for (const s of symbols) {
         const cs: Candle[] = candles[s]!;
         const closes = cs.map((c) => c.close);
         const frac = ensembleFraction(closes, p.allowShort === 1);
+        const atrs = p.maxLegRisk ? atr(cs, CATASTROPHIC_ATR_PERIOD) : [];
         for (let i = 0; i < cs.length; i++) {
           const vol = realizedVol(closes, i, p.volLookback);
           const t = cs[i]!.openTime;
-          if (!raw.has(t)) { raw.set(t, {}); closeAt.set(t, {}); }
+          if (!raw.has(t)) { raw.set(t, {}); closeAt.set(t, {}); stopAt.set(t, {}); }
           raw.get(t)![s] = Number.isFinite(vol) && vol > 0 ? frac[i]! / vol : 0;
           closeAt.get(t)![s] = closes[i]!;
+          if (p.maxLegRisk) {
+            const a = atrs[i];
+            // Same distance the engine uses: 4 x ATR, at most half the price.
+            stopAt.get(t)![s] = a !== undefined && Number.isFinite(a) && a > 0 ? Math.min((CATASTROPHIC_ATR * a) / closes[i]!, 0.5) : 0.5;
+          }
         }
       }
       // 2) Portfolio-level volatility targeting: scale the whole raw portfolio so its realised
@@ -131,6 +150,13 @@ export function createDonchianEnsemble(p: DonchianEnsembleParams = DEFAULT_DONCH
         for (const [s, x] of Object.entries(r)) w[s] = x * scale;
         const gross = Object.values(w).reduce((a, x) => a + Math.abs(x), 0);
         if (gross > p.maxGross) for (const k of Object.keys(w)) w[k] = (w[k]! * p.maxGross) / gross;
+        if (p.maxLegRisk) {
+          const st = stopAt.get(t)!;
+          for (const k of Object.keys(w)) {
+            const cap = p.maxLegRisk / (st[k] ?? 0.5);
+            if (Math.abs(w[k]!) > cap) w[k] = Math.sign(w[k]!) * cap;
+          }
+        }
         perTime.set(t, w);
         prevRaw = r;
         prevClose = { ...(prevClose ?? {}), ...c };

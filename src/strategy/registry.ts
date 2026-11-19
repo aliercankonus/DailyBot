@@ -70,6 +70,14 @@ export const STRATEGIES = {
     integerKeys: new Set(["allowShort"]),
     create: (p) => createTsmom({ ...DEFAULT_TSMOM, ...p }),
   },
+  // BTC/ETH round 12: F on 4h candles (lookbacks in 4h bars), same pre-registered parameters.
+  tsmom4h: {
+    label: "F-4h",
+    interval: "4h",
+    defaults: { ...DEFAULT_TSMOM },
+    integerKeys: new Set(["allowShort"]),
+    create: (p) => createTsmom({ ...DEFAULT_TSMOM, ...p }, "4h"),
+  },
   // Cleaned ideas from the old bot (src/strategy/oldIdeas.ts).
   failedbo: {
     label: "S1",
@@ -110,6 +118,8 @@ export const STRATEGIES = {
   night: { label: "P7", interval: "1h", defaults: {}, integerKeys: new Set<string>(), create: () => createNightSeason() },
   turtle: { label: "P8", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createTurtle55() },
   gcross: { label: "P9", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createGoldenCross() },
+  // BTC/ETH round 12: the same published rules on faster candles (EMA50/200 of 1h closes).
+  gcross1h: { label: "P9-1h", interval: "1h", defaults: {}, integerKeys: new Set<string>(), create: () => createGoldenCross("1h") },
   rsi2: { label: "P10", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createConnorsRsi2() },
   ma2050: { label: "P11", interval: "1h", defaults: {}, integerKeys: new Set<string>(), create: () => createMa2050() },
 } satisfies Record<string, StrategyEntry>;

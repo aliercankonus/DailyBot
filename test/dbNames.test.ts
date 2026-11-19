@@ -30,12 +30,26 @@ describe("engine STRATEGY", () => {
   });
   it("validates names and leverage before the engine starts", () => {
     const resolve = (n: string) => getStrategy(n);
-    expect(() => validateEngineStrategy("trendlv+timestop", 3, resolve)).not.toThrow();
-    expect(() => validateEngineStrategy("st1d", 3, resolve)).not.toThrow();
-    expect(() => validateEngineStrategy("donchianls", 3, resolve)).not.toThrow();
-    expect(() => validateEngineStrategy("donchianls", 1, resolve)).toThrow(/MAX_LEVERAGE 1/);
-    expect(() => validateEngineStrategy("trendl", 3, resolve)).toThrow(/unknown strategy/);
-    expect(() => validateEngineStrategy("donchianls+timestop", 3, resolve)).toThrow(/unknown strategy/);
+    expect(() => validateEngineStrategy("trendlv+timestop", 3, resolve, "paper")).not.toThrow();
+    expect(() => validateEngineStrategy("st1d", 3, resolve, "paper")).not.toThrow();
+    expect(() => validateEngineStrategy("donchianls", 3, resolve, "paper")).not.toThrow();
+    expect(() => validateEngineStrategy("donchianls", 1, resolve, "paper")).toThrow(/MAX_LEVERAGE 1/);
+    expect(() => validateEngineStrategy("trendl", 3, resolve, "paper")).toThrow(/unknown strategy/);
+    expect(() => validateEngineStrategy("donchianls+timestop", 3, resolve, "live")).toThrow(/unknown strategy/);
+    // The 2% rule per leg: uncapped G-LS runs on paper only.
+    expect(() => validateEngineStrategy("donchianls", 3, resolve, "testnet")).toThrow(/2% risk/);
+    expect(() => validateEngineStrategy("donchianls", 3, resolve, "live")).toThrow(/2% risk/);
+    expect(() => validateEngineStrategy("donchianls2", 3, resolve, "live")).not.toThrow();
+    expect(() => validateEngineStrategy("donchianls2", 3, resolve, "testnet")).not.toThrow();
+    expect(() => validateEngineStrategy("donchian", 3, resolve, "live")).toThrow(/2% risk/);
+    expect(() => validateEngineStrategy("donchian", 3, resolve, "testnet")).toThrow(/2% risk/);
+    expect(() => validateEngineStrategy("donchian", 3, resolve, "paper")).not.toThrow();
+    // Leverage is still checked first for a capped strategy.
+    expect(() => validateEngineStrategy("donchianls2", 1, resolve, "live")).toThrow(/MAX_LEVERAGE 1/);
+    for (const n of ["gcross1h", "tsmom4h"]) expect(() => validateEngineStrategy(n, 3, resolve, "live")).not.toThrow();
+    expect(() => validateEngineStrategy("trendlv+timestop", 3, resolve, "live")).not.toThrow();
+    expect(getStrategy("gcross1h").interval).toBe("1h");
+    expect(getStrategy("tsmom4h").interval).toBe("4h");
   });
   it("testnet/live engines need the account registry unless explicitly opted out", () => {
     const keys = { MODE: "testnet", BINANCE_API_KEY: "k", BINANCE_API_SECRET: "s" };

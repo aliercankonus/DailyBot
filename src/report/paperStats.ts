@@ -16,9 +16,14 @@ export interface Expectation {
   maxDrawdown: number;
 }
 
-/** Backtest expectations per BOT_NAME (PROGRESS.md rounds 8-10, full period 2020/21-2026). */
+/**
+ * Backtest expectations per BOT_NAME. A, GC, TS: the BTC/ETH portfolio (PROGRESS.md round 12,
+ * 2020-01 to 2026-11, 2513 days, 1% risk per trade). ST, GLS: the phase-1 20-coin engines (rounds 8-10).
+ */
 export const EXPECTATIONS: Record<string, Expectation> = {
-  A: { label: "A-LV + time stop (4h, 5 coins)", tradesPer30d: 858 / 70, winRate: 0.32, profitFactor: 1.21, avgR: 0.14, annualVol: 0.245, maxDrawdown: 0.318 },
+  A: { label: "A-LV + time stop (4h, BTC/ETH)", tradesPer30d: (490 / 2513) * 30, winRate: 0.33, profitFactor: 1.52, avgR: 0.31, annualVol: 0.168, maxDrawdown: 0.189 },
+  GC: { label: "Golden cross EMA50/200 (1h, BTC/ETH)", tradesPer30d: (523 / 2513) * 30, winRate: 0.25, profitFactor: 1.43, avgR: 0.43, annualVol: 0.325, maxDrawdown: 0.394 },
+  TS: { label: "Time-series momentum (4h, BTC/ETH, long only)", tradesPer30d: (267 / 2513) * 30, winRate: 0.31, profitFactor: 1.9, avgR: 0.36, annualVol: 0.126, maxDrawdown: 0.146 },
   ST: { label: "Supertrend(10,3) daily (20 coins)", tradesPer30d: 647 / 83, winRate: 0.40, profitFactor: 1.6, avgR: 0.29, annualVol: 0.169, maxDrawdown: 0.197 },
   GLS: { label: "G-LS daily Donchian ensemble (20 coins)", annualVol: 0.293, maxDrawdown: 0.326 },
 };

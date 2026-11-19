@@ -1,4 +1,5 @@
-// npm run combo -- --legs "trendlv+timestop:0.5,donchianls:0.5" [--dir data] [--split 2025-01-01]
+// npm run combo -- --legs "trendlv+timestop:0.5,donchianls:0.5" [--dir data] [--split 2025-01-01] [--symbols BTCUSDT,ETHUSDT]
+// A leg may name its interval: "gcross@1h:0.25" (default: the strategy's own interval).
 // Runs each leg over all data with its own default symbols, interval and risk (catalog), then
 // prints each leg and the daily-rebalanced portfolio: full period, from --split, yearly, and the
 // correlation of the legs' daily returns. The "from split" block is the full-run curve from that
@@ -13,25 +14,32 @@ import { attachFunding, fundingCsvPath, loadFundingCsv } from "../data/funding.j
 import { csvPath, loadCsv } from "../data/klines.js";
 import type { FundingPoint } from "../exchange/types.js";
 import { dateMs, parseArgs, str } from "./args.js";
+import { INTERVAL_MS } from "../config.js";
 
 const a = parseArgs();
 const dir = str(a.dir, "data");
 const split = dateMs(str(a.split, "2025-01-01"));
 const legs = str(a.legs, "").split(",").filter(Boolean).map((s) => {
-  const [name, w] = s.split(":");
+  const [spec, w] = s.split(":");
+  const [name, interval] = (spec ?? "").split("@");
   const weight = Number(w ?? "1");
-  if (!name || !Number.isFinite(weight) || weight < 0) throw new Error(`bad leg "${s}" (use name:weight)`);
-  return { name, weight };
+  if (!name || !Number.isFinite(weight) || weight < 0) throw new Error(`bad leg "${s}" (use name[@interval]:weight)`);
+  return { name, interval, weight };
 });
+if (a.symbols === true) throw new Error("--symbols needs a comma-separated list");
+const symbols = typeof a.symbols === "string" ? a.symbols.split(",").map((x) => x.trim()).filter(Boolean) : undefined;
 if (!legs.length) throw new Error('--legs "a:0.5,b:0.5" is required');
 
 const curves: Curve[] = [];
 for (const leg of legs) {
   const entry = getCatalogEntry(leg.name);
+  const interval = leg.interval || entry.interval;
+  if (!Object.hasOwn(INTERVAL_MS, interval)) throw new Error(`leg ${leg.name}: unsupported interval ${interval}`);
+  if (entry.kind === "weights" && interval !== entry.interval) throw new Error(`leg ${leg.name}: weight strategies run on ${entry.interval} only`);
   const data: Record<string, Candle[]> = {};
   const fundingRates: Record<string, FundingPoint[]> = {};
-  for (const s of entry.defaultSymbols) {
-    const k = csvPath(dir, s, entry.interval);
+  for (const s of symbols ?? entry.defaultSymbols) {
+    const k = csvPath(dir, s, interval);
     if (!existsSync(k)) continue;
     let candles = await loadCsv(k);
     const f = fundingCsvPath(dir, s);
@@ -41,6 +49,7 @@ for (const leg of legs) {
     }
     data[s] = candles;
   }
+  if (!Object.keys(data).length) throw new Error(`leg ${leg.name}: no candle files for ${interval} in ${dir}`);
   const cfg: BacktestConfig = {
     ...DEFAULT_BACKTEST, riskPerTrade: entry.defaultRisk, maxOpenPositions: entry.defaultMaxOpen,
     ...(Object.keys(fundingRates).length ? { fundingRates } : {}),
@@ -49,7 +58,7 @@ for (const leg of legs) {
   curves.push(res.equityCurve);
   const full = equityMetrics(res.equityCurve);
   const oos = equityMetrics(rebaseFrom(res.equityCurve, split));
-  console.log(`== leg ${leg.name} (${entry.label}), weight ${leg.weight}, ${entry.interval}, ${Object.keys(data).length} symbols ==`);
+  console.log(`== leg ${leg.name} (${entry.label}), weight ${leg.weight}, ${interval}, ${Object.keys(data).length} symbols ==`);
   console.log(`full: ${formatEquity(full)}`);
   console.log(`from split: CAGR ${(oos.cagr * 100).toFixed(1)}%  Sharpe ${oos.sharpe.toFixed(2)}  max DD ${(oos.maxDrawdownPct * 100).toFixed(1)}%\n`);
 }

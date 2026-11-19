@@ -5,9 +5,10 @@ import { getCatalogEntry } from "../src/backtest/catalog.js";
 import { equityAcceptance, equityMetrics } from "../src/backtest/metrics.js";
 import { runWeightsBacktest } from "../src/backtest/weights.js";
 import { createBtcHold } from "../src/strategy/benchmarks.js";
-import { createDonchianEnsemble, DONCHIAN_LOOKBACKS, ensembleFraction, priorRollingExtreme } from "../src/strategy/donchianEnsemble.js";
+import { CATASTROPHIC_ATR, CATASTROPHIC_ATR_PERIOD, createDonchianEnsemble, DONCHIAN_LOOKBACKS, ensembleFraction, priorRollingExtreme } from "../src/strategy/donchianEnsemble.js";
 import { createFundingCarry, windowAverage } from "../src/strategy/fundingCarry.js";
 import type { WeightStrategy } from "../src/strategy/weights.js";
+import { atr } from "../src/core/indicators.js";
 import { candlesFromCloses } from "./helpers.js";
 
 const D1 = 86_400_000;
@@ -84,6 +85,58 @@ describe("strategy G: Donchian ensemble", () => {
     const w = createDonchianEnsemble({ volTarget: 0.25, volLookback: 90, maxGross: 1.5, allowShort: 0 }).weightSeries({ candles: c, funding: {} });
     expect(w.get(c.A.at(-1)!.openTime)!.A!).toBeCloseTo(1.5);
     expect(DONCHIAN_LOOKBACKS).toHaveLength(9);
+  });
+
+  it("maxLegRisk caps each leg so a hit catastrophic stop loses at most that fraction", () => {
+    const r = noise(9);
+    let p = 100;
+    const closes = Array.from({ length: 700 }, () => (p *= 1.003 + r() * 0.08));
+    const c = { X: candlesFromCloses(closes, T0, D1), Y: candlesFromCloses(closes.map((x) => x * 0.5), T0, D1) };
+    const base = { volTarget: 0.25, volLookback: 90, maxGross: 2, allowShort: 1 };
+    const uncapped = createDonchianEnsemble(base).weightSeries({ candles: c, funding: {} });
+    const capped = createDonchianEnsemble({ ...base, maxLegRisk: 0.02 }).weightSeries({ candles: c, funding: {} });
+    let binding = 0;
+    for (const s of ["X", "Y"] as const) {
+      const a = atr(c[s], CATASTROPHIC_ATR_PERIOD);
+      for (let i = CATASTROPHIC_ATR_PERIOD; i < c[s].length; i++) {
+        const t = c[s][i]!.openTime;
+        const w = capped.get(t)![s]!;
+        const stop = Math.min((CATASTROPHIC_ATR * a[i]!) / c[s][i]!.close, 0.5);
+        expect(Math.abs(w) * stop).toBeLessThanOrEqual(0.02 + 1e-12);
+        expect(Math.abs(w)).toBeLessThanOrEqual(Math.abs(uncapped.get(t)![s]!) + 1e-12);
+        if (Math.abs(w) < Math.abs(uncapped.get(t)![s]!) - 1e-9) binding++;
+      }
+    }
+    expect(binding).toBeGreaterThan(0); // the cap actually does something on this data
+  });
+
+  it("maxLegRisk keeps the sign of shorts, is a no-op when off", () => {
+    // Steady decline: G-LS goes short; the cap must shrink the short, not flip it.
+    const down = Array.from({ length: 500 }, (_, i) => 100 * 0.996 ** i * (1 + (i % 2 ? 0.01 : -0.01)));
+    const c = { A: candlesFromCloses(down, T0, D1) };
+    const base = { volTarget: 0.25, volLookback: 90, maxGross: 2, allowShort: 1 };
+    const t = c.A.at(-1)!.openTime;
+    const uncapped = createDonchianEnsemble(base).weightSeries({ candles: c, funding: {} }).get(t)!.A!;
+    const capped = createDonchianEnsemble({ ...base, maxLegRisk: 0.02 }).weightSeries({ candles: c, funding: {} }).get(t)!.A!;
+    expect(uncapped).toBeLessThan(0);
+    expect(capped).toBeLessThan(0);
+    expect(Math.abs(capped)).toBeLessThan(Math.abs(uncapped));
+    // maxLegRisk 0 is the published strategy, weight for weight.
+    const off = createDonchianEnsemble({ ...base, maxLegRisk: 0 }).weightSeries({ candles: c, funding: {} });
+    const plain = createDonchianEnsemble(base).weightSeries({ candles: c, funding: {} });
+    expect([...off.entries()]).toEqual([...plain.entries()]);
+  });
+
+  it("capped weights have no look-ahead", () => {
+    const r = noise(5);
+    let p = 100;
+    const closes = Array.from({ length: 700 }, () => (p *= 1 + r() * 0.08));
+    const a = { X: candlesFromCloses(closes, T0, D1) };
+    const b = { X: candlesFromCloses(closes.map((c, i) => (i > 600 ? c * 3 : c)), T0, D1) };
+    const g = createDonchianEnsemble({ volTarget: 0.25, volLookback: 90, maxGross: 2, allowShort: 1, maxLegRisk: 0.02 });
+    const wa = g.weightSeries({ candles: a, funding: {} });
+    const wb = g.weightSeries({ candles: b, funding: {} });
+    for (let i = 400; i <= 600; i++) expect(wb.get(a.X[i]!.openTime)).toEqual(wa.get(a.X[i]!.openTime));
   });
 });
 
