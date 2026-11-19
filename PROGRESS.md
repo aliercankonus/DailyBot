@@ -352,6 +352,17 @@ Rule (pre-registered, not tuned): `minTakerShare` 0.5 — the breakout candle's 
 Robustness of the filter: 0.4 = the baseline (no trade removed), 0.6 = 1 trade in 2 years (a cliff, not a plateau).
 Finding: the filter removes only ~2.5% of trades (12 of 490); breakout candles that close above the 20-bar high almost always have buyer-majority taker volume already, so the information is mostly in the price. The small improvement (PF +0.04, Sharpe +0.05) is within noise for 12 trades and the 0.6 cliff shows no usable gradient. NOT ADOPTED; the live set stays frozen. Infrastructure kept (candles and CSVs carry `takerBuyVolume`, parseKline reads it, filter off by default) for open-interest/liquidation work later.
 
+### 2026-11-19 — Round 13b: open-interest confirmation for A (data.binance.vision daily `metrics`, 5-min OI; BTC from 2020-09, ETH from 2021-12)
+Rule (pre-registered, not tuned): `oiLookback` 6 bars (24h) — a breakout needs OI at the signal close above OI 24h earlier (new positions rather than short covering). Missing OI does not block (so ETH before 2021-12 and BTC before 2020-09 equal the baseline). Registry `trendlvoi`. Same setup as round 13.
+
+| | OOS trades | OOS PF | OOS E | OOS DD | CAGR | Sharpe | max DD |
+|---|---|---|---|---|---|---|---|
+| A-LV + time stop (live) | 150 | 1.36 | 0.235R | 19.2% | 20.2% | 1.17 | 19.2% |
+| + OI rising 24h (`trendlvoi+timestop`) | 130 | 1.43 | 0.277R | 17.3% | 18.0% | 1.12 | 17.3% |
+
+Net per year (all data), baseline vs OI filter: 2020 7105 / 7464, 2021 301 / −255, 2022 1476 / 1510, 2023 5162 / 4194, 2024 2953 / 590, 2025 4277 / 4595, 2026 4204 / 3182. OOS robustness: oiLookback 5 → PF 1.46, 7 → PF 1.45 (stable).
+Finding: better out of sample (PF 1.36 → 1.43, DD 19.2% → 17.3%) but worse in sample where the data exists (2021 turns negative, 2023 and 2024 much lower) and worse over the full period (CAGR −2.2 pts, Sharpe −0.05). An edge that appears only out of sample is the same pattern that rejected the ADX cap (round 7): NOT ADOPTED. Re-check on paper-period data later (pre-registered rule unchanged) if wanted; the live engine would also need an OI feed (`/futures/data/openInterestHist`).
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
