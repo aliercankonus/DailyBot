@@ -22,6 +22,12 @@ export interface TrendBreakoutParams {
    * A candle without taker volume data gives no signal while the filter is on.
    */
   minTakerShare: number;
+  /**
+   * Open-interest confirmation in bars (0 = off): a breakout needs open interest at the signal
+   * candle's close above its value oiLookback bars earlier (new positions, not short covering).
+   * Research only: when either value is missing the filter does not block (live has no OI data).
+   */
+  oiLookback: number;
 }
 
 export const DEFAULT_TREND_BREAKOUT: TrendBreakoutParams = {
@@ -33,13 +39,14 @@ export const DEFAULT_TREND_BREAKOUT: TrendBreakoutParams = {
   trailAtr: 3,
   maxAtrPct: 0,
   minTakerShare: 0,
+  oiLookback: 0,
 };
 
 export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAKOUT): Strategy {
   const warmup = Math.max(p.emaSlow, p.entryLookback + 1, p.atrPeriod) + 1;
 
   return {
-    name: `trend-breakout(${p.entryLookback},${p.emaFast}/${p.emaSlow},atr${p.atrPeriod}x${p.stopAtr}/${p.trailAtr}${p.maxAtrPct > 0 ? `,atr<${p.maxAtrPct * 100}%` : ""}${p.minTakerShare > 0 ? `,taker>=${p.minTakerShare}` : ""})`,
+    name: `trend-breakout(${p.entryLookback},${p.emaFast}/${p.emaSlow},atr${p.atrPeriod}x${p.stopAtr}/${p.trailAtr}${p.maxAtrPct > 0 ? `,atr<${p.maxAtrPct * 100}%` : ""}${p.minTakerShare > 0 ? `,taker>=${p.minTakerShare}` : ""}${p.oiLookback > 0 ? `,oi>${p.oiLookback}b` : ""})`,
     interval: "4h",
     warmup,
 
@@ -58,8 +65,10 @@ export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAK
       if (p.maxAtrPct > 0 && a / c.close >= p.maxAtrPct) return null;
 
       const buyShare = takerBuyShare(c);
+      const oiNow = c.openInterest, oiThen = candles[i - p.oiLookback]?.openInterest;
+      const oiOk = p.oiLookback <= 0 || oiNow === undefined || oiThen === undefined || oiNow > oiThen;
       const flowOk = (side: "LONG" | "SHORT") =>
-        p.minTakerShare <= 0 || (buyShare !== null && (side === "LONG" ? buyShare : 1 - buyShare) >= p.minTakerShare);
+        oiOk && (p.minTakerShare <= 0 || (buyShare !== null && (side === "LONG" ? buyShare : 1 - buyShare) >= p.minTakerShare));
 
       if (c.close > hi && fast > slow && c.close > slow && flowOk("LONG")) {
         return {

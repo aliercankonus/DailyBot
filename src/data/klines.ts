@@ -28,11 +28,11 @@ export async function downloadKlines(
   return out.filter((c) => c.closeTime < now && !seen.has(c.openTime) && seen.add(c.openTime));
 }
 
-const HEADER = "openTime,open,high,low,close,volume,closeTime,takerBuyVolume";
+const HEADER = "openTime,open,high,low,close,volume,closeTime,takerBuyVolume,openInterest";
 
 export async function saveCsv(path: string, candles: Candle[]): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
-  const body = candles.map((c) => [c.openTime, c.open, c.high, c.low, c.close, c.volume, c.closeTime, c.takerBuyVolume ?? ""].join(",")).join("\n");
+  const body = candles.map((c) => [c.openTime, c.open, c.high, c.low, c.close, c.volume, c.closeTime, c.takerBuyVolume ?? "", c.openInterest ?? ""].join(",")).join("\n");
   await writeFile(path, `${HEADER}\n${body}\n`);
 }
 
@@ -48,6 +48,7 @@ export async function loadCsv(path: string): Promise<Candle[]> {
       const c: Candle = { openTime: openTime!, open: open!, high: high!, low: low!, close: close!, volume: volume!, closeTime: closeTime! };
       // Optional 8th column (older CSVs have 7).
       if (f[7] !== undefined && f[7] !== "") c.takerBuyVolume = Number(f[7]);
+      if (f[8] !== undefined && f[8] !== "") c.openInterest = Number(f[8]);
       return c;
     });
 }

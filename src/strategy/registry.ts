@@ -50,6 +50,15 @@ export const STRATEGIES = {
     integerKeys: new Set(["entryLookback", "emaFast", "emaSlow", "atrPeriod"]),
     create: (p) => createTrendBreakout({ ...DEFAULT_TREND_BREAKOUT, maxAtrPct: 0.03, minTakerShare: 0.5, ...p }),
   },
+  // A-LV plus open-interest confirmation (round 13b, pre-registered at 6 bars = 24h: OI at the
+  // breakout close above OI 24h earlier). Research only: live has no OI feed.
+  trendlvoi: {
+    label: "A-LV-OI",
+    interval: "4h",
+    defaults: { ...DEFAULT_TREND_BREAKOUT, maxAtrPct: 0.03, oiLookback: 6 },
+    integerKeys: new Set(["entryLookback", "emaFast", "emaSlow", "atrPeriod", "oiLookback"]),
+    create: (p) => createTrendBreakout({ ...DEFAULT_TREND_BREAKOUT, maxAtrPct: 0.03, oiLookback: 6, ...p }),
+  },
   pullback: {
     label: "B",
     interval: "1h",

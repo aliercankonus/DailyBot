@@ -43,3 +43,26 @@ describe("taker flow (order-flow confirmation)", () => {
     expect(off.evaluate("X", withShare(base.slice(0, n), 0.4))?.side).toBe("LONG");
   });
 });
+
+describe("open-interest confirmation (research)", () => {
+  const withOi = (cs: Candle[], rising: boolean | undefined): Candle[] =>
+    cs.map((c, i) => ({ ...c, openInterest: rising === undefined ? undefined : rising ? 1000 + i : 1000 - i }));
+
+  it("blocks a breakout when OI fell over the lookback, passes when it rose or is missing", () => {
+    const base = candlesFromCloses(uptrend());
+    const off = createTrendBreakout(DEFAULT_TREND_BREAKOUT);
+    const on = createTrendBreakout({ ...DEFAULT_TREND_BREAKOUT, oiLookback: 6 });
+    let n = -1;
+    for (let i = 250; i <= base.length; i++) if (off.evaluate("X", base.slice(0, i))?.side === "LONG") { n = i; break; }
+    expect(n).toBeGreaterThan(0);
+    expect(on.evaluate("X", withOi(base.slice(0, n), true))?.side).toBe("LONG");
+    expect(on.evaluate("X", withOi(base.slice(0, n), false))).toBeNull();
+    expect(on.evaluate("X", withOi(base.slice(0, n), undefined))?.side).toBe("LONG");
+  });
+
+  it("CSV keeps open interest", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "oi-"));
+    await saveCsv(join(dir, "c.csv"), withOi(candlesFromCloses([1, 2, 3]), true));
+    expect((await loadCsv(join(dir, "c.csv")))[2]!.openInterest).toBe(1002);
+  });
+});

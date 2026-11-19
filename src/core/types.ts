@@ -9,6 +9,8 @@ export interface Candle {
   volume: number;
   /** Taker (aggressive) buy volume in base units, from the kline. Absent in old CSVs. */
   takerBuyVolume?: number;
+  /** Open interest (base units) at the candle's close. Research data only; the live engine does not fetch it. */
+  openInterest?: number;
   /**
    * Last funding rate SETTLED at or before this candle's close (fraction per 8h, e.g. 0.0001).
    * Only set for strategies that need it (see Strategy.needsFunding).
