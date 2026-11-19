@@ -363,6 +363,11 @@ Rule (pre-registered, not tuned): `oiLookback` 6 bars (24h) — a breakout needs
 Net per year (all data), baseline vs OI filter: 2020 7105 / 7464, 2021 301 / −255, 2022 1476 / 1510, 2023 5162 / 4194, 2024 2953 / 590, 2025 4277 / 4595, 2026 4204 / 3182. OOS robustness: oiLookback 5 → PF 1.46, 7 → PF 1.45 (stable).
 Finding: better out of sample (PF 1.36 → 1.43, DD 19.2% → 17.3%) but worse in sample where the data exists (2021 turns negative, 2023 and 2024 much lower) and worse over the full period (CAGR −2.2 pts, Sharpe −0.05). An edge that appears only out of sample is the same pattern that rejected the ADX cap (round 7): NOT ADOPTED. Re-check on paper-period data later (pre-registered rule unchanged) if wanted; the live engine would also need an OI feed (`/futures/data/openInterestHist`).
 
+### 2026-11-19 — Loss attribution of the live set (BTC+ETH, `--analyze`, all data 2020-01 → 2026-11)
+- A (490 trades): losses are false breakouts. 165 trades closed within 1-6 candles for −119R; losers that never reached +0.25R −89R, reached 0.25-1R −121R, gave back 1R+ only −18R. The 40 trades at 3R+ made +254R (more than the total). The time stop exits failing trades at −0.64R on average instead of −1R (98 trades). ATR 2-3% at signal is marginal (PF 1.04). 2026 longs weak (PF 0.87), 2025 shorts weak (PF 0.87): the two sides alternate.
+- GC (522): 314 stop-outs at −1.09R (−342R) vs 206 cross exits at +2.65R (+546R). 155 losers were 1R+ in profit before the fixed 3-ATR stop hit (−139R given back): the only large "given back" bucket in the set. Idea for after the paper period (not now: parameters frozen): a trailing stop for GC, tested as one pre-registered change.
+- TS (267): losers are small (−0.5R, score exit), only 18 stop-outs; losses happen in 1-18 candles, profits in 49+ candles; 2022 (bear, long only) PF 0.14.
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
