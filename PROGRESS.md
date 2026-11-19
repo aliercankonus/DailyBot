@@ -377,6 +377,20 @@ Finding: better out of sample (PF 1.36 → 1.43, DD 19.2% → 17.3%) but worse i
 | GC + 3-ATR trail | 501 | 34% | 0.97R | 0.92 | 0.76 | −4.5% | −0.40 | 33.0% |
 Robustness: trail 2.4 → OOS PF 0.77, 3.6 → 0.62. Finding: the trail stops winners out on ordinary 1h noise (avg win 4.85R → 0.97R); GC's edge is the few long trends that run from cross to cross. The "given back" losers are the price of holding those. REJECTED, same lesson as A (rounds 4-7).
 
+### 2026-11-19 — Round 15: why the GC trail failed, and wide profit protection (user request)
+GC MFE table (all data, 522 trades): MFE 0-1R 243 trades −246R (bad entries); 1-2R 78 trades, 76 losers −73R; 2-3R 59 trades, 47 losers −36R; 3-5R 60 trades, 28 losers +12R; 5-10R 51 trades +144R; 10R+ 31 trades +414R. Winners capture 50% of their MFE (avg MFE 9.7R, avg win 4.8R).
+Why the 3-ATR trail failed: trades reaching 10R+ fell from 31 to 1 (a 1R-wide trail on 1h is hit by ordinary noise), and stopped-out positions free the slot, so later whipsaw crosses are taken (704 trades vs 522; MFE < 0.5R trades 162 → 311).
+Pre-registered fixes (protection only after a large MFE, distances in R, no tight trail), BTC+ETH 1h, split 2025-01-01:
+
+| GC exit | IS PF | OOS PF | OOS E | avg win (IS) | CAGR | Sharpe | max DD |
+|---|---|---|---|---|---|---|---|
+| live (fixed 3-ATR stop) | 1.35 | 1.48 | 0.445R | 4.85R | 24.0% | 0.82 | 37.7% |
+| `+be2` stop to entry at MFE 2R | 1.43 | 1.47 | 0.389R | 5.11R | 26.8% | 0.90 | 25.7% |
+| `+lock3` lock +1R at MFE 3R | 1.40 | 1.39 | 0.358R | 3.75R | 28.9% | 0.96 | 22.6% |
+| `+wide3` stepped stop 3R behind peak from 3R | 1.37 | 1.16 | 0.178R | 4.25R | 20.5% | 0.81 | 31.2% |
+be2 robustness (trigger ±20%): 1.6R → IS 1.43 / OOS 1.45, DD 26.5%; 2.4R → IS 1.37 / OOS 1.48, DD 27.4%. Portfolio 0.5 A + 0.25 GC + 0.25 TS: live Sharpe 1.18 / DD 15.7% / OOS Sharpe 0.95; with GC+be2 Sharpe 1.21 / DD 15.9% / OOS Sharpe 0.93.
+Finding: wide protection keeps the big winners (be2 avg win 5.11R vs the trail's 0.97R) and cuts GC's own drawdown by a third (37.7% → 25.7%), robust to its trigger; but the gain is in sample (mostly 2021), out of sample it is flat (PF 1.48 → 1.47) and the portfolio barely moves. lock3 and wide3 are worse out of sample. Not adopted now (parameters frozen during paper); be2 is the candidate to re-check on paper-period data at GC's post-mortem.
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.

@@ -115,4 +115,15 @@ export const EXIT_PRESETS: Record<string, ExitOverlay> = {
   // in the same candle = stopped" assumption, so this is the most favourable case for a ladder.
   tpoldnb: { takeProfit: { levels: [{ r: 0.66, fraction: 0.5 }, { r: 1.32, fraction: 0.3 }, { r: 2, fraction: 0.2 }], breakEvenAfterFirst: false } },
   tp1nb: { takeProfit: { levels: [{ r: 1, fraction: 0.5 }], breakEvenAfterFirst: false } },
+  // Round 15 (GC giveback, pre-registered from GC's MFE table: 47 of 59 trades that reached 2-3R and
+  // 28 of 60 that reached 3-5R ended as losers). All are wide, so 1h noise should not stop a trend.
+  // be2: stop to entry once MFE >= 2R.
+  be2: { breakEvenAt: 2, breakEvenBuffer: 0.002 },
+  // ±20% robustness of be2's trigger.
+  be2lo: { breakEvenAt: 1.6, breakEvenBuffer: 0.002 },
+  be2hi: { breakEvenAt: 2.4, breakEvenBuffer: 0.002 },
+  // lock3: once MFE >= 3R, lock +1R.
+  lock3: { lockTiers: [[3, 1]] },
+  // wide3: from 3R a stepped stop 3R behind the peak (entry at 3R, +1R at 4R, ... +17R at 20R).
+  wide3: { lockTiers: [[3, 0], [4, 1], [5, 2], [6, 3], [8, 5], [10, 7], [15, 12], [20, 17]] },
 };
