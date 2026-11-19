@@ -158,6 +158,38 @@ describe("engine management", () => {
     expect(ex.positions.BTCUSDT).toBeUndefined();
   });
 
+  it("a stale first sighting (engine was down) does not close immediately", async () => {
+    at(signalIdx);
+    await engine.tick();
+    const pos = (await repo.getOpenPosition("BTCUSDT"))!;
+    ex.positions.BTCUSDT = { ...ex.positions.BTCUSDT!, markPrice: pos.stop * 0.99 };
+    ex.now += 60_000;
+    await engine.tick();
+    ex.now += 60 * 60_000; // an hour later
+    await engine.tick();
+    expect(await repo.getOpenPosition("BTCUSDT")).not.toBeNull();
+    expect(repo.events.filter((e) => e.kind === "STOP_BREACHED")).toHaveLength(2);
+  });
+
+  it("a rejected backstop close does not trip the kill switch when the stop filled first", async () => {
+    at(signalIdx);
+    await engine.tick();
+    const pos = (await repo.getOpenPosition("BTCUSDT"))!;
+    ex.positions.BTCUSDT = { ...ex.positions.BTCUSDT!, markPrice: pos.stop * 0.99 };
+    ex.now += 60_000;
+    await engine.tick();
+    // Next check: getPosition still shows it, but the market order fails because the stop fills in between.
+    const realMarket = ex.marketOrder.bind(ex);
+    ex.marketOrder = async (p) => {
+      ex.triggerStop("BTCUSDT", pos.stop);
+      return realMarket({ ...p, quantity: p.quantity }).then(() => { throw new Error("-2022 ReduceOnly Order is rejected"); });
+    };
+    ex.now += 60_000;
+    await engine.tick();
+    expect((await repo.getState<KillSwitch>("killSwitch"))?.on ?? false).toBe(false);
+    expect(repo.events.some((e) => e.kind === "CLOSE_RACED")).toBe(true);
+  });
+
   it("a brief breach that recovers does not close the position", async () => {
     at(signalIdx);
     await engine.tick();

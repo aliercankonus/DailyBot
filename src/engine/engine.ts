@@ -59,6 +59,8 @@ const CLIENT_PREFIX = "te-";
 const PENDING_ENTRY_TTL_MS = 60 * 60_000;
 /** How long to wait for exit fills to appear after a position disappears from the exchange. */
 const EXIT_FILLS_GRACE_MS = 10 * 60_000;
+/** A stop-breach sighting older than this is stale (engine or API was down) and starts a new count. */
+const BREACH_MAX_AGE_MS = 5 * 60_000;
 
 /** Deterministic Binance client id (max 36 chars, [A-Za-z0-9._:/-]). Times are base36 to stay short. */
 export function clientId(symbol: string, candleOpenTime: number, suffix: string): string {
@@ -165,13 +167,16 @@ export class Engine {
     const breached = lp.markPrice !== undefined && pos.stop > 0 && (pos.side === "LONG" ? lp.markPrice <= pos.stop : lp.markPrice >= pos.stop);
     if (breached) {
       const firstSeen = await repo.getState<number>(breachKey);
-      if (firstSeen === null || firstSeen === undefined) {
+      // A sighting older than BREACH_MAX_AGE_MS (engine or API was down in between) does not count.
+      if (firstSeen === null || firstSeen === undefined || this.now() - firstSeen > BREACH_MAX_AGE_MS) {
         await repo.setState(breachKey, this.now());
         await this.event("warn", "STOP_BREACHED", symbol, `mark ${lp.markPrice} is through the stop ${pos.stop}; closing at market if it persists`);
       } else if (this.now() > firstSeen) {
         await this.event("error", "STOP_NOT_TRIGGERED", symbol, `mark ${lp.markPrice} still through the stop ${pos.stop}; closing at market`);
         await repo.setState(breachKey, null);
-        await this.closeAtMarket(pos, "STOP_NOT_TRIGGERED");
+        // The stop may fill right now: re-read, and if the position is gone let the next reconcile book it.
+        if (!(await ex.getPosition(symbol))) return;
+        await this.closeAtMarket(pos, "STOP_NOT_TRIGGERED", { recheckOnFailure: true });
         return;
       }
     } else if ((await repo.getState<number>(breachKey)) != null) {
@@ -443,7 +448,7 @@ export class Engine {
     }
   }
 
-  async closeAtMarket(pos: PositionRow, reason: string): Promise<void> {
+  async closeAtMarket(pos: PositionRow, reason: string, opts: { recheckOnFailure?: boolean } = {}): Promise<void> {
     const ex = this.d.exchange;
     try {
       const fill = await ex.marketOrder({
@@ -463,6 +468,14 @@ export class Engine {
       });
       await this.notify("warn", `${pos.symbol} closed at market (${reason}) @ ${fill.avgPrice}`);
     } catch (e) {
+      if (opts.recheckOnFailure) {
+        // E.g. the exchange stop filled first and the reduce-only order was rejected: nothing to do.
+        const still = await ex.getPosition(pos.symbol).catch(() => undefined);
+        if (still === null) {
+          await this.event("warn", "CLOSE_RACED", pos.symbol, `market close (${reason}) rejected but the position is already gone: ${errMsg(e)}`);
+          return;
+        }
+      }
       // Could not close and could not protect: stop all trading and alert a human.
       await this.tripKillSwitch(`${pos.symbol}: market close failed (${reason}): ${errMsg(e)}`);
     }
