@@ -55,7 +55,7 @@ CONSTRAINTS (verbatim): Binance USDⓈ-M futures, long + short ("Futures long + 
 - Fails: nothing known.
 
 ## Next steps (ordered)
-1. Verify the first G-LS rebalance (2026-11-19 00:00-00:30 UTC: "Rebalance" notification in engine-gls logs, weights in the paper account, a catastrophic stop per leg) and the first Supertrend daily candle (engine-st acts on the 19 Nov 00:00 close). A scheduled check in the old session runs at 00:40 UTC; a new session should check the logs again. Fix anything broken (/e2e-code-review with the security reviewer for src/engine|exchange|risk).
+1. DONE 2026-11-19 00:40 UTC: first G-LS rebalance ran at 00:01 (17 shorts, gross ~80%; UNI/NEAR/AAVE flat), no tick failures; GLS ticks now ~12.5s (per-tick stop checks on 17 legs, fine at 60s TICK_SECONDS). ST processed the 19 Nov candle with no new Supertrend signal. Keep watching the logs daily for the first week.
 2. Paper period, 2-3 months, parameters FROZEN: weekly report (REPORT=1 redeploy), post-mortem at each engine's 30th trade, one versioned change at a time and validated on later data only. Stop rule: an engine beyond its backtest max drawdown or flagged deviations -> stop and investigate.
 3. Telegram alerts once the user gives TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (put them in the hPanel env and in the deploy `environment`).
 4. Testnet: one Binance sub-account + testnet keys per engine (hPanel env or request_credential, never chat), ST_/GLS_ MODE=testnet and BINANCE_BASE_URL; check the full order lifecycle (`BINANCE_STOP_API` auto|algo|legacy). The registry blocks reuse of one key across engines.
