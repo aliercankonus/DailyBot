@@ -146,3 +146,18 @@ describe("popular strategies", () => {
     }
   });
 });
+
+describe("golden cross trailing stop (round 14)", () => {
+  const cs = candlesFromCloses(Array.from({ length: 300 }, (_, i) => 100 + i), T0, H1);
+  const pos: OpenPositionView = { side: "LONG", entryPrice: 150, stop: 140, initialStop: 140, entryCandleOpenTime: cs[50]!.openTime };
+  it("off by default: stop unchanged", () => {
+    expect(createGoldenCross("1h").updateStop(pos, cs)).toBe(140);
+  });
+  it("trails up below the highest high and never loosens", () => {
+    const s = createGoldenCross("1h", 3);
+    const up = s.updateStop(pos, cs);
+    expect(up).toBeGreaterThan(140);
+    expect(up).toBeLessThan(cs.at(-1)!.high);
+    expect(s.updateStop({ ...pos, stop: 1e9 }, cs)).toBe(1e9);
+  });
+});

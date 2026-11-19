@@ -211,9 +211,13 @@ export function createTurtle55(): Strategy {
 }
 
 /** P9 Golden / death cross EMA 50/200 daily, always in the market; 3 ATR catastrophic stop. */
-export function createGoldenCross(interval: "1h" | "4h" | "1d" = "1d"): Strategy {
+/**
+ * trailAtr (0 = off): chandelier trailing stop, highest high (lowest low) since entry -/+ trailAtr x ATR(14),
+ * only ever tightening. Round 14 research: the fixed 3-ATR stop gave back 1R+ on 155 losers.
+ */
+export function createGoldenCross(interval: "1h" | "4h" | "1d" = "1d", trailAtr = 0): Strategy {
   return {
-    name: `golden-cross(ema50/200) ${interval}`, interval, warmup: 210,
+    name: `golden-cross(ema50/200) ${interval}${trailAtr > 0 ? ` trail ${trailAtr}atr` : ""}`, interval, warmup: 210,
     evaluate(symbol, candles) {
       const i = candles.length - 1;
       if (i < this.warmup) return null;
@@ -231,7 +235,18 @@ export function createGoldenCross(interval: "1h" | "4h" | "1d" = "1d"): Strategy
       const side = f > s ? "above" : "below";
       return `ema50 ${fmt(f)} ${side} ema200 ${fmt(s)} (gap ${gap.toFixed(2)}%); trades only on the bar where ema50 crosses ema200 (next: ${f > s ? "death cross -> short" : "golden cross -> long"})`;
     },
-    updateStop: (p) => p.stop,
+    updateStop(p, candles) {
+      if (trailAtr <= 0) return p.stop;
+      const i = candles.length - 1, a = atr(candles, 14)[i];
+      if (a === undefined || !Number.isFinite(a)) return p.stop;
+      let hh = -Infinity, ll = Infinity;
+      for (let j = i; j >= 0 && candles[j]!.openTime >= p.entryCandleOpenTime; j--) {
+        hh = Math.max(hh, candles[j]!.high);
+        ll = Math.min(ll, candles[j]!.low);
+      }
+      if (!Number.isFinite(hh)) return p.stop;
+      return tighten(p, p.side === "LONG" ? hh - trailAtr * a : ll + trailAtr * a);
+    },
     shouldExit(p, candles) {
       const cl = candles.map((k) => k.close), i = cl.length - 1;
       const f = ema(cl, 50)[i]!, s = ema(cl, 200)[i]!;

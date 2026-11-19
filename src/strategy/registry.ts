@@ -138,6 +138,11 @@ export const STRATEGIES = {
   gcross: { label: "P9", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createGoldenCross() },
   // BTC/ETH round 12: the same published rules on faster candles (EMA50/200 of 1h closes).
   gcross1h: { label: "P9-1h", interval: "1h", defaults: {}, integerKeys: new Set<string>(), create: () => createGoldenCross("1h") },
+  // GC with a 3-ATR chandelier trail (round 14, pre-registered = its own initial stop distance). Research only.
+  gcross1htr: {
+    label: "P9-1h-TR", interval: "1h", defaults: { trailAtr: 3 }, integerKeys: new Set<string>(),
+    create: (p) => createGoldenCross("1h", p?.trailAtr ?? 3),
+  },
   rsi2: { label: "P10", interval: "1d", defaults: {}, integerKeys: new Set<string>(), create: () => createConnorsRsi2() },
   ma2050: { label: "P11", interval: "1h", defaults: {}, integerKeys: new Set<string>(), create: () => createMa2050() },
 } satisfies Record<string, StrategyEntry>;

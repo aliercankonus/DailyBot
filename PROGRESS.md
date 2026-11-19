@@ -368,6 +368,15 @@ Finding: better out of sample (PF 1.36 → 1.43, DD 19.2% → 17.3%) but worse i
 - GC (522): 314 stop-outs at −1.09R (−342R) vs 206 cross exits at +2.65R (+546R). 155 losers were 1R+ in profit before the fixed 3-ATR stop hit (−139R given back): the only large "given back" bucket in the set. Idea for after the paper period (not now: parameters frozen): a trailing stop for GC, tested as one pre-registered change.
 - TS (267): losers are small (−0.5R, score exit), only 18 stop-outs; losses happen in 1-18 candles, profits in 49+ candles; 2022 (bear, long only) PF 0.14.
 
+### 2026-11-19 — Round 14: trailing stop for GC (user request; pre-registered 3-ATR chandelier = GC's own initial stop distance)
+`gcross1htr`: highest high (lowest low) since entry ∓ 3 × ATR(14) on 1h, tighten only; exit on the reverse cross unchanged. BTC+ETH, split 2025-01-01.
+
+| | IS trades | IS win | IS avg win | IS PF | OOS PF | CAGR | Sharpe | max DD |
+|---|---|---|---|---|---|---|---|---|
+| GC (live, fixed 3-ATR stop) | 369 | 23% | 4.85R | 1.35 | 1.48 | 24.0% | 0.82 | 37.7% |
+| GC + 3-ATR trail | 501 | 34% | 0.97R | 0.92 | 0.76 | −4.5% | −0.40 | 33.0% |
+Robustness: trail 2.4 → OOS PF 0.77, 3.6 → 0.62. Finding: the trail stops winners out on ordinary 1h noise (avg win 4.85R → 0.97R); GC's edge is the few long trends that run from cross to cross. The "given back" losers are the price of holding those. REJECTED, same lesson as A (rounds 4-7).
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
