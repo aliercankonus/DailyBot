@@ -27,7 +27,8 @@ x-node: &node
 x-universe: &universe BTCUSDT,ETHUSDT,BNBUSDT,SOLUSDT,XRPUSDT,ADAUSDT,DOGEUSDT,AVAXUSDT,LINKUSDT,DOTUSDT,LTCUSDT,BCHUSDT,TRXUSDT,ATOMUSDT,ETCUSDT,XLMUSDT,FILUSDT,UNIUSDT,NEARUSDT,AAVEUSDT
 
 x-db-url: &dburl postgres://trader:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/trader
-x-db-a: &db_a postgres://trader:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/trader_a
+# A_DB: engine A database (set A_DB=trader_a_testnet for testnet so paper state such as the equity peak does not carry over).
+x-db-a: &db_a postgres://trader:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/${A_DB:-trader_a}
 x-db-gc: &db_gc postgres://trader:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/trader_gc
 x-db-ts: &db_ts postgres://trader:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/trader_ts
 
@@ -96,7 +97,7 @@ services:
       MODE: ${MODE:-paper}
       DATABASE_URL: *dburl
       # One database per engine instance (see below).
-      EXTRA_DATABASES: trader_a,trader_gc,trader_ts
+      EXTRA_DATABASES: trader_a,trader_gc,trader_ts,${A_DB:-trader_a}
     depends_on:
       db: { condition: service_healthy }
     restart: "no"
