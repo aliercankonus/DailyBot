@@ -19,6 +19,8 @@ export interface Strategy {
   readonly needsFunding?: boolean;
   /** Minimum number of closed candles needed before evaluate() can return a signal. */
   readonly warmup: number;
+  /** Research only: closed candles the BACKTEST gives this strategy (default STRATEGY_WINDOW). The live engine ignores it. */
+  readonly window?: number;
   /** Entry decision on the last candle of `candles`. */
   evaluate(symbol: string, candles: Candle[]): Signal | null;
   /**

@@ -1,4 +1,5 @@
 // All strategies by name. The backtest CLI, the research job and the live engine select from here.
+import { createIntrabar } from "./intrabar.js";
 import { createFunding, DEFAULT_FUNDING } from "./funding.js";
 import { createMeanReversion, DEFAULT_MEAN_REVERSION } from "./meanReversion.js";
 import { createPullback, DEFAULT_PULLBACK } from "./pullback.js";
@@ -58,6 +59,16 @@ export const STRATEGIES = {
     defaults: { ...DEFAULT_TREND_BREAKOUT, maxAtrPct: 0.03, oiLookback: 6 },
     integerKeys: new Set(["entryLookback", "emaFast", "emaSlow", "atrPeriod", "oiLookback"]),
     create: (p) => createTrendBreakout({ ...DEFAULT_TREND_BREAKOUT, maxAtrPct: 0.03, oiLookback: 6, ...p }),
+  },
+  // Round 18 research (backtest only): A-LV + time stop run on 15m candles, entries decided only at
+  // 4h closes (control) or at every 15m close on the forming 4h candle.
+  trendlv15c: {
+    label: "A-LV 15m closed", interval: "15m", defaults: {}, integerKeys: new Set<string>(),
+    create: () => createIntrabar(getStrategy("trendlv+timestop").create(), "15m", 900_000, 14_400_000, "closed"),
+  },
+  trendlv15i: {
+    label: "A-LV 15m intrabar", interval: "15m", defaults: {}, integerKeys: new Set<string>(),
+    create: () => createIntrabar(getStrategy("trendlv+timestop").create(), "15m", 900_000, 14_400_000, "intrabar"),
   },
   pullback: {
     label: "B",

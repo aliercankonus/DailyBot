@@ -6,6 +6,7 @@ import { PgRepo } from "../db/pgRepo.js";
 import { Engine } from "../engine/engine.js";
 import { INTERVAL_MS } from "../config.js";
 import { getStrategy } from "../strategy/registry.js";
+import { STRATEGY_WINDOW } from "../strategy/types.js";
 import { DEFAULT_WEIGHTS_ENGINE, WeightsEngine } from "../engine/weightsEngine.js";
 import { isWeightStrategy, validateEngineStrategy, WEIGHT_STRATEGIES } from "../strategy/weightRegistry.js";
 import { makeExchange, makeNotifier, makePool } from "./runtime.js";
@@ -173,6 +174,7 @@ try {
   if (!intervalMs) throw new Error(`strategy interval ${strategy.interval} is not supported`);
   // Partial take-profits exist only in the backtest so far; trading without them live would not
   // be the strategy that was tested.
+  if (strategy.window !== undefined && strategy.window > STRATEGY_WINDOW) throw new Error(`strategy ${cfg.STRATEGY} needs ${strategy.window} candles (backtest-only research strategy)`);
   if (strategy.takeProfit) throw new Error(`strategy ${cfg.STRATEGY} uses partial take-profits, which the live engine does not support yet`);
   if (strategy.interval !== cfg.INTERVAL) log("info", `INTERVAL=${cfg.INTERVAL} ignored; strategy ${cfg.STRATEGY} uses ${strategy.interval}`);
   const engine = new Engine({

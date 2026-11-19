@@ -247,7 +247,7 @@ export function runBacktest(strategy: Strategy, data: Record<string, Candle[]>, 
       }
 
       // 3) Candle closed: trail the stop, or look for a new entry.
-      const history = candles.slice(Math.max(0, i + 1 - STRATEGY_WINDOW), i + 1);
+      const history = candles.slice(Math.max(0, i + 1 - (strategy.window ?? STRATEGY_WINDOW)), i + 1);
       const still = open.get(s);
       if (still) {
         const view = {
