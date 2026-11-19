@@ -1,5 +1,6 @@
 // Operations dashboard: one read-only page over all engine databases. HTTP Basic auth on every
-// route except /health; no write endpoints (the kill switch stays on the per-engine API).
+// route except /health when a password is set (an empty password = open, owner's choice for now);
+// no write endpoints (the kill switch stays on the per-engine API).
 import { timingSafeEqual } from "node:crypto";
 import Fastify from "fastify";
 import { authFailureLimiter } from "../api/server.js";
@@ -20,7 +21,8 @@ const safeEqual = (a: string, b: string) => {
 };
 
 export function buildDashboard(opts: DashboardOptions) {
-  if (opts.password.length < 12) throw new Error("DASHBOARD_PASSWORD must be at least 12 characters");
+  const open = opts.password === "";
+  if (!open && opts.password.length < 12) throw new Error("DASHBOARD_PASSWORD must be at least 12 characters (or empty for no login)");
   const now = opts.now ?? Date.now;
   // One trusted hop (traefik): req.ip is the address traefik appended, not a client-supplied
   // X-Forwarded-For entry, so the failed-auth lockout cannot be dodged by spoofing the header.
@@ -29,7 +31,7 @@ export function buildDashboard(opts: DashboardOptions) {
   const expected = `Basic ${Buffer.from(`${opts.user}:${opts.password}`).toString("base64")}`;
 
   app.addHook("onRequest", async (req, reply) => {
-    if (req.url.split("?")[0] === "/health") return;
+    if (open || req.url.split("?")[0] === "/health") return;
     if (limiter.blocked(req.ip)) return reply.code(429).send({ error: "too many failed attempts" });
     if (!safeEqual(req.headers.authorization ?? "", expected)) {
       if (req.headers.authorization) limiter.fail(req.ip);
@@ -38,6 +40,7 @@ export function buildDashboard(opts: DashboardOptions) {
   });
   app.addHook("onSend", async (_req, reply) => {
     reply.header("X-Content-Type-Options", "nosniff");
+    reply.header("X-Robots-Tag", "noindex, nofollow");
     reply.header("X-Frame-Options", "DENY");
     reply.header("Referrer-Policy", "no-referrer");
     reply.header("Cache-Control", "no-store");

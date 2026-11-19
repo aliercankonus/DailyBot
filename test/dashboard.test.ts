@@ -6,6 +6,13 @@ const basic = (u: string, p: string) => `Basic ${Buffer.from(`${u}:${p}`).toStri
 const app = () => buildDashboard({ engines: [], user: "admin", password: "correct-horse-battery", prices: async () => ({ BTCUSDT: 1 }) });
 
 describe("dashboard server", () => {
+  it("an empty password means no login (owner's choice); pages still get the security headers", async () => {
+    const a = buildDashboard({ engines: [], user: "admin", password: "", prices: async () => ({}) });
+    const r = await a.inject({ url: "/" });
+    expect(r.statusCode).toBe(200);
+    expect(r.headers["x-robots-tag"]).toMatch(/noindex/);
+    expect((await a.inject({ url: "/api/overview" })).statusCode).toBe(200);
+  });
   it("refuses a short password", () => {
     expect(() => buildDashboard({ engines: [], user: "a", password: "short", prices: async () => ({}) })).toThrow(/12 characters/);
   });

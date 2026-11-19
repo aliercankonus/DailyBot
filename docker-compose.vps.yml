@@ -205,14 +205,14 @@ services:
       migrate: { condition: service_completed_successfully }
     restart: "no"
 
-  # Operations dashboard (read-only, HTTP Basic auth) for all engines, served over HTTPS by the
+  # Operations dashboard (read-only; HTTP Basic auth when DASHBOARD_PASSWORD is set, open when empty) for all engines, served over HTTPS by the
   # traefik project (Let's Encrypt) at DASHBOARD_HOST; also on 127.0.0.1:8090 for an SSH tunnel.
   dashboard:
     <<: [*node, *api_common]
     command: ["node", "dist/cli/dashboard.js"]
     environment:
       DASHBOARD_USER: ${DASHBOARD_USER:-admin}
-      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:?set DASHBOARD_PASSWORD}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD:-}
       DASH_DB_A: *db_a
       DASH_DB_GC: *db_gc
       DASH_DB_TS: *db_ts

@@ -1,4 +1,4 @@
-// Operations dashboard process. Env: DASHBOARD_PASSWORD (>= 12 chars), DASHBOARD_USER (default admin),
+// Operations dashboard process. Env: DASHBOARD_PASSWORD (>= 12 chars; empty = no login), DASHBOARD_USER (default admin),
 // DASH_DB_A / DASH_DB_GC / DASH_DB_TS (engine databases), DASH_MODE_A / _GC / _TS (display only),
 // DASH_STRATEGY_A / _GC / _TS (display only), API_PORT (default 8080).
 import pg from "pg";
@@ -7,10 +7,7 @@ import { buildDashboard } from "../dashboard/server.js";
 
 const env = process.env;
 const password = env.DASHBOARD_PASSWORD ?? "";
-if (password.length < 12) {
-  console.error(JSON.stringify({ level: "fatal", msg: "DASHBOARD_PASSWORD must be set (at least 12 characters)" }));
-  process.exit(1);
-}
+if (password === "") console.log(JSON.stringify({ level: "warn", msg: "DASHBOARD_PASSWORD is empty: the dashboard is open without login (read-only)" }));
 const ENGINES = [
   { key: "A", label: "Trend kırılımı (4s)", exitRule: "3 ATR takip eden stop + zaman stopu" },
   { key: "GC", label: "Altın kesişim (1s)", exitRule: "ters kesişim; 2R'de stop girişe (be2)" },
