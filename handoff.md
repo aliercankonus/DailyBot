@@ -21,15 +21,18 @@ CONSTRAINTS (verbatim): Binance USDⓈ-M futures, long + short ("Futures long + 
 - Every exit that takes profit earlier than A's 3-ATR trail hurts (break-even, lock tiers, R trail, stepped stop, TP1/TP2 incl. the old bot's exact ladder `tpold`). Reason (round 7 loss attribution): given-back profit is only −37R vs +364R from the 7% of trades that reach 3R+. Do not reopen this without new evidence.
 - Adopted: volatility filter (`trendlv`, maxAtrPct 3%) and the loser time stop (`+timestop`). Not adopted: ADX cap (only works OOS = curve fitting), dd-scale/loss-streak (lower Sharpe), same-side cap/cooldown (optional risk-budget knob).
 - Round 9 tested the 11 most recommended public strategies at published settings (Supertrend 4h/1d, MACD+EMA200, LazyBear squeeze, Ichimoku, Padysak-Vojtko 10-day max/min, Larry Williams vol breakout, 21-23 UTC seasonality, Turtle 55/20, golden cross, Connors RSI2). Only Supertrend(10,3) daily on 20 coins (`st1d`) works in both periods (IS PF 1.87, OOS 1.22, robust ±20%). Round 10: relative value vs BTC (`ethbtcmr`, `altbtcmr`, `altbtctrend`) all fail.
-- BEST CANDIDATE (round 10): equal thirds `st1d` (daily, 20 coins, 0.5% risk) + `trendlv+timestop` (4h, 5 coins, 1% risk) + `donchianls` (G-LS, daily, 20 coins): positive every year 2020–2026, CAGR 18.5%, Sharpe 1.04, max DD 18.6%; from 2025 Sharpe 0.68, DD 16.8%. (Previous best A-LV+timestop + G-LS 50/50: Sharpe 0.99, DD 20.7%.)
-- PARAMETERS ARE FROZEN (~35 variants tested on 2020–2026). Paper trading is now the only valid test.
+- CURRENT PLAN (round 12, 2026-11-19, user: focus BTC+ETH, 2,000 EUR): 0.5 `trendlv+timestop` (4h) + 0.25 `gcross1h` + 0.25 `tsmom4h`, BTC+ETH only, 1% risk per engine slice. Backtest 2020-01 → 2026-11: CAGR 20.3%, Sharpe 1.18, max DD 15.2%, every year positive. G-LS gets the 2% per-leg rule (`donchianls2`, enforced outside paper) and is not in the BTC/ETH plan.
+- SUPERSEDED (round 10, 20-coin portfolio): equal thirds `st1d` (daily, 20 coins, 0.5% risk) + `trendlv+timestop` (4h, 5 coins, 1% risk) + `donchianls` (G-LS, daily, 20 coins): positive every year 2020–2026, CAGR 18.5%, Sharpe 1.04, max DD 18.6%; from 2025 Sharpe 0.68, DD 16.8%. (Previous best A-LV+timestop + G-LS 50/50: Sharpe 0.99, DD 20.7%.)
+- PARAMETERS ARE FROZEN (~35 variants in rounds 1-11, 92 strategy/timeframe runs in round 12, no parameter tuned). Paper trading is now the only valid test.
 
 ## Artifacts
 - Report for the user (Turkish, published, version 2 covers rounds 1–10): https://claude.ai/artifact/FqxTDUMpNa1PHf6EjBdvzD — source file was in the session scratchpad (`dailybot-rapor.html`); to update from a new session, read the artifact by URL and republish with `url`.
-- `PROGRESS.md` — every round's table (rounds 1–8), loss attribution, portfolio table.
-- Commits on `main` (all CI green): 31557d8 popular strategies + `--brief`, 4852a8a relative value, f15aae7 round 10 recorded; earlier 88b607f TP support, a74c71e same-side cap/cooldown, 2e7a586 stepped stops, 337e3f0 `--analyze`, 1c211be `trendlv`, 13e0043 combo CLI + RESEARCH_COMBO, 03f319d round 8 recorded.
+- `PROGRESS.md` — every round's table (rounds 1–12), loss attribution, portfolio tables, Decisions, Deployment.
+- The report artifact does not yet cover round 12 (BTC/ETH); update it if the user wants a written report.
+- Round 12 commits on `main` (CI green): dc641bd BTC/ETH portfolio + 2% leg cap + guard, 736181c / 2863577 handoff. Earlier commits: 31557d8 popular strategies + `--brief`, 4852a8a relative value, f15aae7 round 10 recorded; earlier 88b607f TP support, a74c71e same-side cap/cooldown, 2e7a586 stepped stops, 337e3f0 `--analyze`, 1c211be `trendlv`, 13e0043 combo CLI + RESEARCH_COMBO, 03f319d round 8 recorded.
 
 ## Files touched (most relevant)
+- Round 12: `src/strategy/donchianEnsemble.ts` (`maxLegRisk`, CATASTROPHIC_ATR/_PERIOD shared with the engine), `src/strategy/weightRegistry.ts` (`donchianls2`, MAX_LEG_RISK, mode-aware `validateEngineStrategy`), `src/strategy/registry.ts` (`gcross1h`, `tsmom4h`), `src/strategy/popular.ts` / `tsmom.ts` (interval parameter), `src/backtest/catalog.ts` (`donchianls2`), `src/cli/combo.ts` (`name@interval`, `--symbols`), `src/report/paperStats.ts` (A/GC/TS expectations), `docker-compose.vps.yml` (BTC/ETH engines).
 - `src/strategy/popular.ts` — the 11 public strategies (registry names st4h, st1d, macd, sqzlb, ichi, maxmin, volbo, night, turtle, gcross, rsi2); `src/core/indicators.ts` adds supertrend, macd, linreg, highestHigh/lowestLow.
 - `src/strategy/relativeValue.ts` — dollar-neutral alt/BTC revert/trend (catalog names ethbtcmr, altbtcmr, altbtctrend).
 - `src/cli/backtest.ts` — `--brief` two-line summary per strategy (use for screening many strategies in one run).
@@ -41,7 +44,7 @@ CONSTRAINTS (verbatim): Binance USDⓈ-M futures, long + short ("Futures long + 
 - `src/backtest/combine.ts`, `src/cli/combo.ts` (`npm run combo -- --legs "a:0.5,b:0.5"`) — portfolio blending, daily rebalanced.
 - `docker-compose.vps.yml` — research service env: RESEARCH, RESEARCH_STRATEGIES (`none` skips), RESEARCH_ARGS, RESEARCH_COMBO (space-separated portfolios of comma-separated name:weight).
 - `src/cli/engine.ts` — live engine refuses strategies with takeProfit (unused now; TPs rejected).
-- `src/engine/engine.ts` — live engine supports trades strategies only; NO weight-strategy (G-LS) support yet.
+- `src/engine/engine.ts` (trades strategies) and `src/engine/weightsEngine.ts` (weight strategies such as G-LS: daily rebalance, catastrophic stops); `src/cli/engine.ts` picks one by STRATEGY.
 
 ## Current state
 - 2026-11-19 08:32 UTC: ROUND 12 DEPLOYED (commit dc641bd, CI green, after /e2e-code-review REQUEST_CHANGES → fixed). Paper engines now trade BTC+ETH only, on NEW databases (old phase-1 history kept in trader / trader_st / trader_gls):
@@ -67,18 +70,68 @@ CONSTRAINTS (verbatim): Binance USDⓈ-M futures, long + short ("Futures long + 
 5. Live with 2,000 EUR split 50/25/25 if paper holds up.
 6. Optional: dashboard; more coins once capital grows (min notional); before any live G-LS, re-place stops when the cap changes.
 
+## Session setup (for the new session, check first)
+- Repo `aliercankonus/DailyBot` (the old name `dailytradingbot` redirects). Work on `main`; CI builds `ghcr.io/aliercankonus/dailybot:main` on every push (~1 minute), then deploy.
+- Cloud environment **dailybot** (allows data.binance.vision for backtest data). The Default environment cannot download candles. fapi.binance.com answers "restricted location" from cloud sessions; only the VPS can talk to the Binance API.
+- **Hostinger connector** must be connected (deploy, logs, secrets). Check with `vps_docker_list` {virtualMachineId 1955523}. If it is missing, tell the user to connect it in claude.ai connector settings; nothing on the VPS can be changed without it.
+- GitHub MCP tools for CI status (`actions_list` list_workflow_runs, owner aliercankonus, repo DailyBot, branch main).
+- First commands: read `handoff.md`, `PROGRESS.md` (round 12 and Deployment), `CLAUDE.md`; `vps_docker_list` (all containers healthy?); `vps_docker_logs` {projectName "dailybot"} (look for `[A]`, `[GC]`, `[TS]` lines and errors).
+- Local tests: `npm ci`, then start the local Postgres (command in Current state; if `/var/tmp/te-pg` does not exist in a fresh container, `npm test` without TEST_DATABASE_URL still runs everything except the 6 Postgres tests).
+- Reply to the user in Turkish, short and plain.
+
+## What to expect (normal behaviour, not bugs)
+- Engines tick every 60 s (log line `tick`, A ~1 s, GC ~2 s, TS ~1 s). Healthchecks fail only if no tick succeeds for 5 minutes.
+- Trades are rare: backtest averages per engine are A ~5.8, GC ~6.2, TS ~3.2 closed trades per 30 days (BTC+ETH together). Days without any trade are normal. A and TS act only on 4h closes (00, 04, 08, 12, 16, 20 UTC), GC on 1h closes when EMA50 crosses EMA200.
+- TS is long only: no shorts from TS is correct. A and GC trade both sides.
+- Losing streaks are normal: win rates are 25-33%; the edge comes from few big winners (avg win 2-5R). Ten losses in a row happen in the backtest.
+- `ORDER_TOO_SMALL` / `BELOW_MIN_NOTIONAL` on BTCUSDT for TS (575 USDT slice) in volatile weeks is expected (Binance BTC minimum 100 USDT notional).
+- The first report after a deploy shows equity 0.00 when it runs before the engines' first tick (empty new database). Run it again later.
+- Old phase-1 databases (trader, trader_st, trader_gls) are no longer written; they are kept only as history.
+
+## Monitoring checklist (daily in the first week, then weekly)
+1. `vps_docker_list`: all `dailybot` containers running/healthy; migrate, report and research `Exited (0)` is normal.
+2. `vps_docker_logs`: no repeated `level":"error"`, no `kill switch`, no `protectOrClose` failures, every open position has a stop.
+3. Report: redeploy with REPORT=1 (environment from `vps_docker_get`), read `report-1`: equity, max DD, trades, win rate, PF, avg R per engine vs backtest, `CHECK:` deviation lines, `POST-MORTEM` notice.
+4. Stop and investigate (and tell the user) when: an engine's drawdown exceeds its backtest max (A 18.9%, GC 39.4%, TS 14.6%), a `CHECK:` line appears, the kill switch is on, or an engine is unhealthy for more than 10 minutes. Never "fix" by changing parameters: they are frozen; find the bug or record the deviation.
+5. At each engine's 30th closed trade: post-mortem in PROGRESS.md (paper vs backtest; one versioned change at a time, validated on later data only).
+
+## When the user sends the keys (runbooks)
+Keys never go through chat. The user puts them in hPanel → VPS → Docker manager → project `dailybot` → environment variables. If they paste a key in chat anyway: do not repeat it, tell them to revoke it and create a new one.
+- **Telegram**: variables `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (one chat for all engines; messages are prefixed `[A]`/`[GC]`/`[TS]`). Then `vps_docker_get` (check both names are present, do not print values) → `vps_docker_create` with that environment and the current compose → check logs for a sent "Engine started" message and ask the user to confirm it arrived.
+- **Binance testnet** (one sub-account and key pair per engine; the registry refuses a reused key):
+  1. Variables: A `BINANCE_API_KEY`, `BINANCE_API_SECRET`, `MODE=testnet`; GC `GC_BINANCE_API_KEY`, `GC_BINANCE_API_SECRET`, `GC_MODE=testnet`; TS `TS_BINANCE_API_KEY`, `TS_BINANCE_API_SECRET`, `TS_MODE=testnet`. Base URL defaults to https://demo-fapi.binance.com for testnet (override with `BINANCE_BASE_URL` / `GC_BINANCE_BASE_URL` / `TS_BINANCE_BASE_URL` only if Binance moved it).
+  2. Pin the image: `IMAGE_TAG=<full git sha of the tested commit>` (CI pushes sha tags) instead of `main`.
+  3. Note: plain MODE is also read by migrate and the APIs; after the deploy check they still start (they hold no keys).
+  4. Deploy, then verify on testnet: engine registers its key fingerprint (engine_accounts), reads balance, places an entry with the deterministic client id, places the exchange-side stop (find which `BINANCE_STOP_API` works: auto → algo or legacy; record it in PROGRESS.md), moves/cancels the stop, closes the position; restart the engine with an open position and confirm it reconciles from the exchange (the exchange is the source of truth); force a failed stop and confirm protectOrClose closes at market.
+  5. Run testnet for at least 1-2 weeks; compare fills/fees/slippage with the paper assumptions (0.05% + 0.05%).
+- **Live** (only after paper 2-3 months AND testnet pass, and only when the user says go): real sub-accounts, `*_MODE=live`, `CONFIRM_LIVE=I_UNDERSTAND_REAL_MONEY` (and `GC_CONFIRM_LIVE`, `TS_CONFIRM_LIVE`), slices 50/25/25 of the funded amount (ask the user the real USDT amount; `*_PAPER_START_BALANCE` is ignored live). Keep risk 1% per engine slice; do not raise MAX_LEVERAGE (3) or the 2%/5x limits in src/config.ts. Run `/e2e-code-review` (security reviewer) on everything since the last review before switching.
+
+## Go-live criteria (proposed to the user, not yet agreed)
+- Paper: at least 60 days and at least 30 closed trades in total; no engine beyond its backtest max drawdown; portfolio PF > 1.1; no unexplained `CHECK:` deviations; zero positions without a stop.
+- Testnet: full order lifecycle verified per engine (entry, stop placed, stop moved, exit, restart reconciliation, failed-stop fallback); stop API mode recorded.
+- User confirms capital and accepts that a 15-20% drawdown of the account (≈300-400 EUR on 2,000) is within normal backtest behaviour.
+
+## Do not
+- Do not tune parameters on 2020-2026 data or re-run "best of" searches to replace the live set during the paper period (selection bias; paper is the only clean test).
+- Do not rename the compose services (Hostinger leaves orphan containers) and do not `vps_docker_delete` (deletes the database volume).
+- Do not send `environment` from memory or with missing keys (it replaces everything; always start from `vps_docker_get`).
+- Do not commit secrets, `.env`, `data/`, or edit `.claude/` by hand.
+- Do not add gates beyond the 8-gate cap in src/risk/gates.ts; no symbol/side special cases.
+
 ## Suggested skills for the next agent
 - `/e2e-code-review` before merging anything under src/engine, src/exchange or src/risk (security reviewer mandatory); `/delegate` for larger builds (dashboard, report); `/context-handoff` at ~75% context.
 
 ## Open questions for user
-- Telegram bot token/chat id for alerts? (optional)
-- When will Binance testnet keys (one per engine/sub-account) be available?
-- EUR/USDT rate at funding time (paper slices assume ~2,300 USDT for 2,000 EUR).
+- Telegram bot token and chat id (user said they will send them soon; via hPanel env).
+- Binance testnet keys, one sub-account per engine (A, GC, TS) (user said soon; via hPanel env).
+- Real USDT amount at funding time (paper slices assume 2,000 EUR ≈ 2,300 USDT → 1150/575/575).
+- Agree the go-live criteria above.
 
 ## Probes
-- What is the recommended portfolio and its backtest numbers? (⅓ st1d + ⅓ trendlv+timestop + ⅓ donchianls; every year positive 2020–26, CAGR 18.5%, Sharpe 1.04, DD 18.6%, from-2025 Sharpe 0.68.)
-- Which popular internet strategies were tested and which survived? (11 in round 9; only Supertrend daily; pairs vs BTC failed in round 10.)
-- Why are TP1/TP2 and stepped stops not used? (Given-back profit is −37R vs +364R from big winners; every early-profit exit lowered OOS PF.)
-- What is running on the VPS and where are the secrets needed to redeploy? (Three paper engines A/ST/GLS with own DBs and APIs 8081-8083; POSTGRES_PASSWORD and API_TOKEN are in the hPanel project env — ask the user, they are not in the repo.)
-- What must be done before testnet/live? (The deferred review items in PROGRESS.md Deployment, then testnet validation with one sub-account per engine.)
-- Can parameters still be tuned on 2020–2026 data? (No, frozen; paper is the only valid test.)
+- What is running on the VPS? (Three BTC/ETH paper engines: A trendlv+timestop 4h 1150 USDT, GC gcross1h 575 USDT, TS tsmom4h 575 USDT; services engine/engine-st/engine-gls; databases trader_a/gc/ts; APIs 8081-8083.)
+- Backtest of the chosen portfolio? (0.5 A + 0.25 GC + 0.25 TS on BTC/ETH 2020-01 → 2026-11: CAGR 20.3%, Sharpe 1.18, max DD 15.2%, every year positive; from 2025 CAGR 19.7%.)
+- Best per timeframe on BTC/ETH? (15m none; 1h golden cross; 4h A-LV+timestop (best) and tsmom; 1d G-LS but too much risk per leg.)
+- How is the 2% rule applied to G-LS? (maxLegRisk caps each leg's catastrophic-stop loss at 2%; uncapped weight strategies refuse to start outside paper; G-LS is not in the BTC/ETH plan.)
+- Where are the deploy secrets? (On the server: `vps_docker_get` returns them in `environment`; never in the repo or chat.)
+- Why are TP1/TP2 and stepped stops not used? (Given-back profit is −37R vs +364R from big winners; every early-profit exit lowered OOS PF, rounds 4-7.)
+- Can parameters be tuned now? (No, frozen until the paper post-mortems.)
