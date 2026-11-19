@@ -188,6 +188,23 @@ services:
     ports:
       - "127.0.0.1:8083:8080"
 
+  # Opt-in key release: RELEASE_BOT=<BOT_NAME> removes that engine's engine_accounts row (e.g. after
+  # moving an engine to a new database); the engine registers again on its next start. Unset it after.
+  release:
+    image: postgres:16-alpine
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      RELEASE_BOT: ${RELEASE_BOT:-}
+    command:
+      - sh
+      - -c
+      - >-
+        if [ -z "$${RELEASE_BOT}" ]; then echo "release skipped"; exit 0; fi;
+        echo "DELETE FROM engine_accounts WHERE bot_name = :'bot';" | psql -h db -U trader -d trader -v ON_ERROR_STOP=1 -v bot="$${RELEASE_BOT}"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    restart: "no"
+
   # Opt-in research job: set RESEARCH=1 in the project environment, then update the project.
   # It downloads 4h/1h candles (5 coins), 1d candles and funding history (20 coins) from 2021,
   # prints a backtest report per strategy to its logs
