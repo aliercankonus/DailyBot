@@ -25,6 +25,8 @@ export interface ExchangePosition {
   side: Side;
   quantity: number; // always positive
   entryPrice: number;
+  /** Exchange mark price, when the exchange reports it (Binance positionRisk). Paper leaves it unset. */
+  markPrice?: number;
 }
 
 export interface Fill {

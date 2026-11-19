@@ -235,7 +235,11 @@ export class BinanceFutures implements Exchange {
     const r = rows.find((x) => x.symbol === symbol && Number(x.positionAmt) !== 0);
     if (!r) return null;
     const amt = Number(r.positionAmt);
-    return { symbol, side: amt > 0 ? "LONG" : "SHORT", quantity: Math.abs(amt), entryPrice: Number(r.entryPrice) };
+    const mark = Number(r.markPrice);
+    return {
+      symbol, side: amt > 0 ? "LONG" : "SHORT", quantity: Math.abs(amt), entryPrice: Number(r.entryPrice),
+      ...(Number.isFinite(mark) && mark > 0 ? { markPrice: mark } : {}),
+    };
   }
 
   async prepareSymbol(symbol: string, leverage: number): Promise<void> {

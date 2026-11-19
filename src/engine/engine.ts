@@ -157,6 +157,26 @@ export class Engine {
       await repo.updatePosition(pos.id, { quantity: lp.quantity });
       pos.quantity = lp.quantity;
     }
+    // Backstop for a stop that did not fire (e.g. Binance priceProtect suppresses STOP_MARKET while
+    // mark and last price diverge in a crash, or an exchange glitch): if the mark price is through
+    // the stop on two consecutive checks (>= one tick apart, so a stop that is filling right now
+    // is not raced), close at market.
+    const breachKey = `stopBreach:${pos.id}`;
+    const breached = lp.markPrice !== undefined && pos.stop > 0 && (pos.side === "LONG" ? lp.markPrice <= pos.stop : lp.markPrice >= pos.stop);
+    if (breached) {
+      const firstSeen = await repo.getState<number>(breachKey);
+      if (firstSeen === null || firstSeen === undefined) {
+        await repo.setState(breachKey, this.now());
+        await this.event("warn", "STOP_BREACHED", symbol, `mark ${lp.markPrice} is through the stop ${pos.stop}; closing at market if it persists`);
+      } else if (this.now() > firstSeen) {
+        await this.event("error", "STOP_NOT_TRIGGERED", symbol, `mark ${lp.markPrice} still through the stop ${pos.stop}; closing at market`);
+        await repo.setState(breachKey, null);
+        await this.closeAtMarket(pos, "STOP_NOT_TRIGGERED");
+        return;
+      }
+    } else if ((await repo.getState<number>(breachKey)) != null) {
+      await repo.setState(breachKey, null);
+    }
     const stops = (await ex.getOpenStops(symbol)).filter((s) => s.side === closingSide(pos.side));
     const covered = stops.reduce((a, s) => a + s.quantity, 0) >= pos.quantity - 1e-12;
     if (!covered) {

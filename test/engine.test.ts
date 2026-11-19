@@ -140,6 +140,41 @@ describe("engine management", () => {
     expect(repo.events.some((e) => e.kind === "STOP_MISSING")).toBe(true);
   });
 
+  it("closes at market when the mark price stays through the stop (stop did not fire)", async () => {
+    at(signalIdx);
+    await engine.tick();
+    const pos = (await repo.getOpenPosition("BTCUSDT"))!;
+    const through = pos.stop * 0.99;
+    ex.positions.BTCUSDT = { ...ex.positions.BTCUSDT!, markPrice: through };
+    ex.mark.BTCUSDT = through;
+    ex.now += 60_000;
+    await engine.tick();
+    expect(repo.events.some((e) => e.kind === "STOP_BREACHED")).toBe(true);
+    expect((await repo.getOpenPosition("BTCUSDT"))).not.toBeNull(); // first sighting: wait one tick
+    ex.now += 60_000;
+    await engine.tick();
+    expect(await repo.getOpenPosition("BTCUSDT")).toBeNull();
+    expect(repo.positions[0]!.exitReason).toBe("STOP_NOT_TRIGGERED");
+    expect(ex.positions.BTCUSDT).toBeUndefined();
+  });
+
+  it("a brief breach that recovers does not close the position", async () => {
+    at(signalIdx);
+    await engine.tick();
+    const pos = (await repo.getOpenPosition("BTCUSDT"))!;
+    ex.positions.BTCUSDT = { ...ex.positions.BTCUSDT!, markPrice: pos.stop * 0.99 };
+    ex.now += 60_000;
+    await engine.tick();
+    ex.positions.BTCUSDT = { ...ex.positions.BTCUSDT!, markPrice: pos.stop * 1.05 };
+    ex.now += 60_000;
+    await engine.tick();
+    ex.positions.BTCUSDT = { ...ex.positions.BTCUSDT!, markPrice: pos.stop * 0.99 };
+    ex.now += 60_000;
+    await engine.tick(); // a new first sighting, not a close
+    expect(await repo.getOpenPosition("BTCUSDT")).not.toBeNull();
+    expect(repo.events.filter((e) => e.kind === "STOP_BREACHED")).toHaveLength(2);
+  });
+
   it("an unknown exchange position turns the kill switch on and is not touched", async () => {
     at(signalIdx - 5);
     ex.positions.BTCUSDT = { symbol: "BTCUSDT", side: "SHORT", quantity: 1, entryPrice: 100 };
