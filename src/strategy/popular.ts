@@ -4,6 +4,7 @@
 // All are pure functions of CLOSED candles, like every other strategy.
 import { atr, ema, highestHigh, linreg, lowestLow, macd, priorHighest, priorLowest, rsi, sma, supertrend } from "../core/indicators.js";
 import type { Candle, OpenPositionView, Side, Signal } from "../core/types.js";
+import { fmt } from "./trendBreakout.js";
 import type { Strategy } from "./types.js";
 
 const H = 3_600_000;
@@ -221,6 +222,14 @@ export function createGoldenCross(interval: "1h" | "4h" | "1d" = "1d"): Strategy
       if (f[i - 1]! <= s[i - 1]! && f[i]! > s[i]!) return sig(symbol, "LONG", c, c.close - 3 * a, "golden cross");
       if (f[i - 1]! >= s[i - 1]! && f[i]! < s[i]!) return sig(symbol, "SHORT", c, c.close + 3 * a, "death cross");
       return null;
+    },
+    explain(candles) {
+      const i = candles.length - 1;
+      if (i < 210) return `warming up (${candles.length}/211 candles)`;
+      const cl = candles.map((k) => k.close);
+      const f = ema(cl, 50)[i]!, s = ema(cl, 200)[i]!, gap = (f / s - 1) * 100;
+      const side = f > s ? "above" : "below";
+      return `ema50 ${fmt(f)} ${side} ema200 ${fmt(s)} (gap ${gap.toFixed(2)}%); trades only on the bar where ema50 crosses ema200 (next: ${f > s ? "death cross -> short" : "golden cross -> long"})`;
     },
     updateStop: (p) => p.stop,
     shouldExit(p, candles) {

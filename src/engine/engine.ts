@@ -270,6 +270,16 @@ export class Engine {
         await repo.setState(sigKey, last.openTime);
       }
     }
+    if (!signal && strategy.explain) {
+      // Diagnostics only: why this closed candle gave no entry (once per candle, logs only).
+      let why: string;
+      try {
+        why = strategy.explain(candles);
+      } catch (e) {
+        why = `explain failed: ${errMsg(e)}`;
+      }
+      console.log(JSON.stringify({ level: "info", msg: "no signal", symbol, candle: new Date(last.openTime).toISOString(), why, time: new Date(this.now()).toISOString() }));
+    }
     if (gate.ok && signal) {
       // Throws on transient failure: lastProcessed is NOT advanced, so the next tick retries
       // (the deterministic client order id prevents a double entry).

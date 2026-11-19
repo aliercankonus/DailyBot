@@ -22,6 +22,12 @@ export interface Strategy {
   /** Entry decision on the last candle of `candles`. */
   evaluate(symbol: string, candles: Candle[]): Signal | null;
   /**
+   * Optional, diagnostics only: a one-line account of the entry conditions on the last candle
+   * (which hold, which do not). The live engine logs it when evaluate() returns no signal.
+   * Must not influence trading.
+   */
+  explain?(candles: Candle[]): string;
+  /**
    * Stop update after the last candle of `candles` closed. Must never loosen the stop:
    * return a price at least as protective as `position.stop`.
    */

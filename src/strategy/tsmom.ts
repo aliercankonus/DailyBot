@@ -72,6 +72,14 @@ export function createTsmom(p: TsmomParams = DEFAULT_TSMOM, interval: "4h" | "1d
       return null;
     },
 
+    explain(candles: Candle[]): string {
+      const score = tsmomScore(candles);
+      if (score === null) return `warming up (${candles.length}/${warmup} candles)`;
+      const now = candles.at(-1)!.close;
+      const ups = TSMOM_LOOKBACKS.filter((L) => now > candles[candles.length - 1 - L]!.close);
+      return `momentum score ${score.toFixed(2)} (entry >= ${p.entryScore}); up vs ${ups.length}/${TSMOM_LOOKBACKS.length} lookbacks [${ups.join(",")}]`;
+    },
+
     updateStop(position: OpenPositionView): number {
       return position.stop;
     },

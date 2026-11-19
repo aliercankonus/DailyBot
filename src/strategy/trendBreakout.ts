@@ -73,6 +73,28 @@ export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAK
       return null;
     },
 
+    explain(candles: Candle[]): string {
+      if (candles.length < warmup) return `warming up (${candles.length}/${warmup} candles)`;
+      const i = candles.length - 1;
+      const c = candles[i]!.close;
+      const closes = candles.map((k) => k.close);
+      const fast = ema(closes, p.emaFast)[i]!;
+      const slow = ema(closes, p.emaSlow)[i]!;
+      const a = atr(candles, p.atrPeriod)[i]!;
+      const hi = priorHighest(candles, p.entryLookback)[i]!;
+      const lo = priorLowest(candles, p.entryLookback)[i]!;
+      const pct = (x: number) => `${(x * 100).toFixed(2)}%`;
+      const trend = fast > slow && c > slow ? "up" : fast < slow && c < slow ? "down" : "mixed";
+      const parts = [
+        `close ${fmt(c)}`,
+        `trend ${trend} (ema${p.emaFast} ${fmt(fast)} vs ema${p.emaSlow} ${fmt(slow)})`,
+        `${p.entryLookback}-bar high ${fmt(hi)} (${pct(hi / c - 1)} away), low ${fmt(lo)} (${pct(1 - lo / c)} away)`,
+      ];
+      if (p.maxAtrPct > 0) parts.push(`atr ${pct(a / c)} (${a / c >= p.maxAtrPct ? "BLOCKED" : "ok"}, max ${pct(p.maxAtrPct)})`);
+      const wait = trend === "up" ? "long needs close above the high" : trend === "down" ? "short needs close below the low" : "no trade until the EMAs and price agree";
+      return `${parts.join("; ")}; ${wait}`;
+    },
+
     updateStop(position: OpenPositionView, candles: Candle[]): number {
       const i = candles.length - 1;
       const a = atr(candles, p.atrPeriod)[i];
@@ -90,3 +112,6 @@ export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAK
     },
   };
 }
+
+/** Compact price for diagnostics (4 significant digits below 1, else 2 decimals). */
+export const fmt = (x: number) => (Math.abs(x) < 1 ? x.toPrecision(4) : x.toFixed(2));
