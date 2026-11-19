@@ -46,7 +46,7 @@ describe("engine STRATEGY", () => {
     expect(() => validateEngineStrategy("donchian", 3, resolve, "paper")).not.toThrow();
     // Leverage is still checked first for a capped strategy.
     expect(() => validateEngineStrategy("donchianls2", 1, resolve, "live")).toThrow(/MAX_LEVERAGE 1/);
-    for (const n of ["gcross1h", "tsmom4h"]) expect(() => validateEngineStrategy(n, 3, resolve, "live")).not.toThrow();
+    for (const n of ["gcross1h", "gcross1h+be2", "tsmom4h"]) expect(() => validateEngineStrategy(n, 3, resolve, "live")).not.toThrow();
     expect(() => validateEngineStrategy("trendlv+timestop", 3, resolve, "live")).not.toThrow();
     expect(getStrategy("gcross1h").interval).toBe("1h");
     expect(getStrategy("tsmom4h").interval).toBe("4h");

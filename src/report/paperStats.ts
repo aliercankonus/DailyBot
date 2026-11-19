@@ -22,7 +22,8 @@ export interface Expectation {
  */
 export const EXPECTATIONS: Record<string, Expectation> = {
   A: { label: "A-LV + time stop (4h, BTC/ETH)", tradesPer30d: (490 / 2513) * 30, winRate: 0.33, profitFactor: 1.52, avgR: 0.31, annualVol: 0.168, maxDrawdown: 0.189 },
-  GC: { label: "Golden cross EMA50/200 (1h, BTC/ETH)", tradesPer30d: (523 / 2513) * 30, winRate: 0.25, profitFactor: 1.43, avgR: 0.43, annualVol: 0.325, maxDrawdown: 0.394 },
+  // GC runs with be2 (stop to entry at MFE 2R) since 2026-11-19 (PROGRESS.md round 15/17).
+  GC: { label: "Golden cross EMA50/200 + be2 (1h, BTC/ETH)", tradesPer30d: (574 / 2513) * 30, winRate: 0.20, profitFactor: 1.44, avgR: 0.41, annualVol: 0.321, maxDrawdown: 0.257 },
   TS: { label: "Time-series momentum (4h, BTC/ETH, long only)", tradesPer30d: (267 / 2513) * 30, winRate: 0.31, profitFactor: 1.9, avgR: 0.36, annualVol: 0.126, maxDrawdown: 0.146 },
   ST: { label: "Supertrend(10,3) daily (20 coins)", tradesPer30d: 647 / 83, winRate: 0.40, profitFactor: 1.6, avgR: 0.29, annualVol: 0.169, maxDrawdown: 0.197 },
   GLS: { label: "G-LS daily Donchian ensemble (20 coins)", annualVol: 0.293, maxDrawdown: 0.326 },
