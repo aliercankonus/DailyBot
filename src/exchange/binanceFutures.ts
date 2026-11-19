@@ -432,6 +432,7 @@ export function parseKline(r: any[]): Candle {
   return {
     openTime: Number(r[0]), open: Number(r[1]), high: Number(r[2]), low: Number(r[3]),
     close: Number(r[4]), volume: Number(r[5]), closeTime: Number(r[6]),
+    ...(r[9] !== undefined ? { takerBuyVolume: Number(r[9]) } : {}),
   };
 }
 

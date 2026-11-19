@@ -16,6 +16,12 @@ export interface TrendBreakoutParams {
   trailAtr: number;
   /** Skip signals when ATR/price at the signal candle is at or above this (0 = off). */
   maxAtrPct: number;
+  /**
+   * Order-flow confirmation (0 = off): the signal candle's taker volume share on the trade's side
+   * (taker buy / volume for a long, taker sell / volume for a short) must be at least this.
+   * A candle without taker volume data gives no signal while the filter is on.
+   */
+  minTakerShare: number;
 }
 
 export const DEFAULT_TREND_BREAKOUT: TrendBreakoutParams = {
@@ -26,13 +32,14 @@ export const DEFAULT_TREND_BREAKOUT: TrendBreakoutParams = {
   stopAtr: 2,
   trailAtr: 3,
   maxAtrPct: 0,
+  minTakerShare: 0,
 };
 
 export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAKOUT): Strategy {
   const warmup = Math.max(p.emaSlow, p.entryLookback + 1, p.atrPeriod) + 1;
 
   return {
-    name: `trend-breakout(${p.entryLookback},${p.emaFast}/${p.emaSlow},atr${p.atrPeriod}x${p.stopAtr}/${p.trailAtr}${p.maxAtrPct > 0 ? `,atr<${p.maxAtrPct * 100}%` : ""})`,
+    name: `trend-breakout(${p.entryLookback},${p.emaFast}/${p.emaSlow},atr${p.atrPeriod}x${p.stopAtr}/${p.trailAtr}${p.maxAtrPct > 0 ? `,atr<${p.maxAtrPct * 100}%` : ""}${p.minTakerShare > 0 ? `,taker>=${p.minTakerShare}` : ""})`,
     interval: "4h",
     warmup,
 
@@ -50,7 +57,11 @@ export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAK
       // Volatility filter: breakouts in very volatile conditions were losers in both periods (PROGRESS.md, round 7).
       if (p.maxAtrPct > 0 && a / c.close >= p.maxAtrPct) return null;
 
-      if (c.close > hi && fast > slow && c.close > slow) {
+      const buyShare = takerBuyShare(c);
+      const flowOk = (side: "LONG" | "SHORT") =>
+        p.minTakerShare <= 0 || (buyShare !== null && (side === "LONG" ? buyShare : 1 - buyShare) >= p.minTakerShare);
+
+      if (c.close > hi && fast > slow && c.close > slow && flowOk("LONG")) {
         return {
           symbol,
           side: "LONG",
@@ -60,7 +71,7 @@ export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAK
           reason: `close ${c.close} > ${p.entryLookback}-bar high ${hi}; ema${p.emaFast} > ema${p.emaSlow}`,
         };
       }
-      if (c.close < lo && fast < slow && c.close < slow) {
+      if (c.close < lo && fast < slow && c.close < slow && flowOk("SHORT")) {
         return {
           symbol,
           side: "SHORT",
@@ -90,6 +101,8 @@ export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAK
         `trend ${trend} (ema${p.emaFast} ${fmt(fast)} vs ema${p.emaSlow} ${fmt(slow)})`,
         `${p.entryLookback}-bar high ${fmt(hi)} (${pct(hi / c - 1)} away), low ${fmt(lo)} (${pct(1 - lo / c)} away)`,
       ];
+      const bs = takerBuyShare(candles[i]!);
+      if (p.minTakerShare > 0) parts.push(`taker buy ${bs === null ? "n/a" : pct(bs)} (needs >= ${pct(p.minTakerShare)} on the trade side)`);
       if (p.maxAtrPct > 0) parts.push(`atr ${pct(a / c)} (${a / c >= p.maxAtrPct ? "BLOCKED" : "ok"}, max ${pct(p.maxAtrPct)})`);
       const wait = trend === "up" ? "long needs close above the high" : trend === "down" ? "short needs close below the low" : "no trade until the EMAs and price agree";
       return `${parts.join("; ")}; ${wait}`;
@@ -115,3 +128,9 @@ export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAK
 
 /** Compact price for diagnostics (4 significant digits below 1, else 2 decimals). */
 export const fmt = (x: number) => (Math.abs(x) < 1 ? x.toPrecision(4) : x.toFixed(2));
+
+/** Taker buy volume / volume of a candle, or null when the data is missing. */
+export function takerBuyShare(c: Candle): number | null {
+  if (c.takerBuyVolume === undefined || !Number.isFinite(c.takerBuyVolume) || !(c.volume > 0)) return null;
+  return c.takerBuyVolume / c.volume;
+}
