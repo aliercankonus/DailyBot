@@ -340,6 +340,18 @@ Portfolios (combo CLI, daily rebalanced, BTC/ETH, legs correlated 0.54-0.60):
 **Chosen for paper → live (2,000 EUR ≈ 2,300 USDT):** 0.5 A (4h) + 0.25 GC (golden cross 1h) + 0.25 TS (tsmom 4h), BTC+ETH, each engine 1% risk of its own slice (≈ 0.5% / 0.25% / 0.25% of total capital per trade). Paper engines retargeted on 2026-11-19 with the live slice sizes (1150 / 575 / 575 USDT) so minimum notionals behave as live (BTCUSDT minimum 100 USDT: TS on BTC can be skipped in very volatile weeks). Caveats: legs are correlated (one market, two coins), 2021-2022 were nearly flat, and these are backtests (selection among 92 runs).
 Review (/e2e-code-review, REQUEST_CHANGES → fixed): guard `mode` is now required (compiler enforces cfg.MODE), guard tests added (uncapped `donchian`/`donchianls` rejected on testnet/live), ATR <= 0 no longer gives an infinite cap, `maxLegRisk` is excluded from the robustness sweep, combo rejects bad intervals/empty legs, test that every compose BOT_NAME has an expectation. Known limit before G-LS goes live: the exchange stop is re-placed only when the position size changes and the 0.02 band can skip small resizes, so a leg's risk can drift above 2% between resizes (by at most the band, ~2% of equity in notional); G-LS is not in the BTC/ETH live plan.
 
+### 2026-11-19 — Round 13: order-flow (taker buy/sell balance) confirmation for A (local, data.binance.vision 2020-01 → 2026-11-18)
+User question: are volume / order-flow data (funding, open interest, liquidations, taker balance) useful? Funding was already tested (D crowding PF 0.65, H carry Sharpe 0.60: both fail). Taker balance is in the kline archive (column 9, taker buy base volume), so it was tested first.
+Rule (pre-registered, not tuned): `minTakerShare` 0.5 — the breakout candle's aggressive volume must be majority on the trade's side (taker buy / volume >= 0.5 for a long, taker sell share >= 0.5 for a short). Registry `trendlvtk` = A-LV + this filter. BTC+ETH 4h, 1% risk, same costs, split 2025-01-01.
+
+| | trades (all) | OOS trades | OOS PF | OOS E | OOS DD | CAGR | Sharpe | max DD |
+|---|---|---|---|---|---|---|---|---|
+| A-LV + time stop (live) | 490 | 150 | 1.36 | 0.235R | 19.2% | 20.2% | 1.17 | 19.2% |
+| + taker >= 0.5 (`trendlvtk+timestop`) | 478 | 146 | 1.40 | 0.259R | 18.4% | 21.0% | 1.22 | 18.4% |
+
+Robustness of the filter: 0.4 = the baseline (no trade removed), 0.6 = 1 trade in 2 years (a cliff, not a plateau).
+Finding: the filter removes only ~2.5% of trades (12 of 490); breakout candles that close above the 20-bar high almost always have buyer-majority taker volume already, so the information is mostly in the price. The small improvement (PF +0.04, Sharpe +0.05) is within noise for 12 trades and the 0.6 cliff shows no usable gradient. NOT ADOPTED; the live set stays frozen. Infrastructure kept (candles and CSVs carry `takerBuyVolume`, parseKline reads it, filter off by default) for open-interest/liquidation work later.
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
