@@ -418,6 +418,15 @@ Harness `src/strategy/intrabar.ts`: A-LV + time stop on 15m candles (data.binanc
 | every 15 min, forming candle | 606 | 1.41 | 1.54 | 0.325R | 5,616 | 21.9% | 1.14 | 18.2% | 2022 (−3.2%) |
 Finding: deciding on the forming candle adds 27% more trades (breakouts that do not hold to the close) and 29% more costs; in sample PF falls 1.66 → 1.41, Sharpe 1.23 → 1.14 and 2022 turns negative; the OOS gain (PF 1.47 → 1.54) is the out-of-sample-only pattern again. NOT ADOPTED: the live engine keeps deciding at closed candles. (The control on 15m data is close to the 4h backtest, Sharpe 1.23 vs 1.17: the harness is sound.)
 
+### 2026-11-20 — Round 19: join the strategy's open position at engine start-up? (user request)
+Question: the live engines missed the 5.11-20.11 fall (backtest GC +6.4R/+6.8R, A BTC +4.9R open) because they started after the entry bars. Rule tested: at start-up, if the strategy holds a position, enter at once with the strategy's CURRENT stop and leave when the strategy leaves. Method: BTC+ETH single-symbol backtests 2021-01..2026-11-19 (data.binance.vision), a start day every day at 00:00 UTC; joined R = (move from the start price to the strategy's exit - fees/slippage) / distance to the current stop; days whose stop is < 0.2% away skipped. Samples are overlapping days of the same trades (not independent). Pre-registered pass: mean joined R > 0 in BOTH halves (split 2025-01-01).
+| strategy | joined IS (2021-24) | joined OOS (2025-26) | fresh trades IS / OOS (reference) | verdict |
+|---|---|---|---|---|
+| A trendlv+timestop | +0.10R (n=607 days, win 30%) | +0.73R (n=319, win 35%) | +0.21R / +0.24R | passes, weak: IS +0.10 is within noise (~±0.12) and below a fresh trade; OOS lifted by the 2025-26 trends (ETH +0.97) |
+| GC gcross1h+be2 | -0.04R (n=1630) | +0.16R (n=804) | +0.16R / +0.40R | FAIL (IS negative) |
+| TS tsmom4h | +0.05R (n=950) | -0.05R (n=390) | +0.22R / +0.20R | FAIL (OOS negative) |
+Conclusion: no change. Joining mid-trend is worth much less than a fresh signal (the good part of the move is usually gone, and the current stop is often far); only A is marginally positive and not robust in IS. Missing an ongoing trend after a start is a one-off cost of starting, not a recurring loss. Script: session scratchpad join.mts (not committed).
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
