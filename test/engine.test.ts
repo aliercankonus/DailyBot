@@ -455,3 +455,19 @@ describe("engine strategy exits", () => {
     expect(ex.stops).toHaveLength(0);
   });
 });
+
+describe("close price never borrowed from another order", () => {
+  it("leaves the exit price unknown when the closing order's own fills are not visible", async () => {
+    at(signalIdx);
+    await engine.tick();
+    ex.zeroFillPrice = true;
+    ex.now += 60_000;
+    // An unrelated SELL fill in the window, and the closing fill hidden (userTrades lag).
+    (ex.fills.BTCUSDT ??= []).push({ time: ex.now, price: 1, qty: 9, side: "SELL", realizedPnl: 0, commission: 0, orderId: "OTHER" });
+    const realGetFills = ex.getFills.bind(ex);
+    ex.getFills = async (s, since) => (await realGetFills(s, since)).filter((f) => f.orderId === "OTHER" || f.side !== "SELL");
+    await engine.closeAtMarket((await repo.getOpenPosition("BTCUSDT"))!, "TEST");
+    expect(repo.positions[0]!.exitPrice).toBeNull();
+    expect(repo.events.some((e) => e.kind === "FILL_PRICE_MISSING")).toBe(true);
+  });
+});

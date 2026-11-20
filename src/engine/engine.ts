@@ -460,9 +460,9 @@ export class Engine {
     }
   }
 
-  /** Volume-weighted price of this account's fills on `side` in the last 5 minutes, or null. */
-  private async recentFillPrice(symbol: string, side: "BUY" | "SELL"): Promise<number | null> {
-    const fills = (await this.d.exchange.getFills(symbol, this.now() - 5 * 60_000).catch(() => [])).filter((f) => f.side === side);
+  /** Volume-weighted price of the account fills of one order (last 5 minutes), or null. Never mixes in other orders. */
+  private async orderFillPrice(symbol: string, side: "BUY" | "SELL", orderId: string): Promise<number | null> {
+    const fills = (await this.d.exchange.getFills(symbol, this.now() - 5 * 60_000).catch(() => [])).filter((f) => f.side === side && f.orderId === orderId);
     const qty = fills.reduce((a, f) => a + f.qty, 0);
     return qty > 0 ? fills.reduce((a, f) => a + f.price * f.qty, 0) / qty : null;
   }
@@ -481,7 +481,7 @@ export class Engine {
         return;
       }
       await this.cancelOurStops(pos.symbol, await ex.getOpenStops(pos.symbol));
-      let exitPrice: number | null = fill.avgPrice > 0 ? fill.avgPrice : await this.recentFillPrice(pos.symbol, closingSide(pos.side));
+      let exitPrice: number | null = fill.avgPrice > 0 ? fill.avgPrice : await this.orderFillPrice(pos.symbol, closingSide(pos.side), fill.orderId);
       if (exitPrice === null) {
         await this.event("error", "FILL_PRICE_MISSING", pos.symbol, `market close (${reason}) filled without a price; PnL unknown, check the exchange trade history`);
       }
