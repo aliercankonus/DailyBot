@@ -275,7 +275,15 @@ export class BinanceFutures implements Exchange {
       }, true);
       const fill = toFill(r);
       // Seen on the Binance demo: FILLED with executedQty but avgPrice and cumQuote "0".
-      return fill.executedQty > 0 && !(fill.avgPrice > 0) ? await this.resolveFillPrice(p.symbol, fill) : fill;
+      if (fill.executedQty > 0 && !(fill.avgPrice > 0)) {
+        // Diagnostics: the raw price/qty fields exactly as Binance sent them (no keys or secrets in here).
+        const raw: Record<string, unknown> = {};
+        for (const k of ["status", "type", "executedQty", "cumQty", "cumQuote", "avgPrice", "price", "origQty", "updateTime"]) raw[k] = r?.[k];
+        raw.fields = r && typeof r === "object" ? Object.keys(r).join(",") : typeof r;
+        console.error(JSON.stringify({ level: "warn", msg: "market order filled without a price", symbol: p.symbol, clientOrderId: p.clientOrderId, raw, time: new Date().toISOString() }));
+        return await this.resolveFillPrice(p.symbol, fill);
+      }
+      return fill;
     } catch (e) {
       // Timeout or 5xx: the order may still have been accepted. Look it up before giving up.
       const again = await this.findOrder(p.symbol, p.clientOrderId).catch(() => null);
