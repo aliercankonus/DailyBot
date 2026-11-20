@@ -1,9 +1,10 @@
 // Liquidation collector: listens to Binance USD-M !forceOrder for LIQ_SYMBOLS and stores every
 // event in the main database (table liquidations). Research data only; it never trades.
-// Env: DATABASE_URL (main db), LIQ_SYMBOLS (default BTCUSDT,ETHUSDT).
+// Env: DATABASE_URL (main db), LIQ_SYMBOLS (default BTCUSDT,ETHUSDT), LIQ_WS_BASE (default
+// wss://fstream.binance.com), LIQ_CONTROL=1 adds a mark-price control stream (diagnostics).
 import { writeFile } from "node:fs/promises";
 import pg from "pg";
-import { liquidationStreamUrl, parseForceOrder, type Liquidation } from "../collect/liquidations.js";
+import { liquidationStreamUrl, parseForceOrder, streamOf, type Liquidation } from "../collect/liquidations.js";
 
 const HEARTBEAT_FILE = "/tmp/collector-heartbeat";
 const symbols = (process.env.LIQ_SYMBOLS || "BTCUSDT,ETHUSDT").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
@@ -16,6 +17,9 @@ const pool = new pg.Pool({ connectionString: dbUrl, max: 2 });
 const log = (level: string, msg: string, extra: Record<string, unknown> = {}) =>
   console.log(JSON.stringify({ level, msg, ...extra, time: new Date().toISOString() }));
 
+const wsBase = process.env.LIQ_WS_BASE || "wss://fstream.binance.com";
+const control = process.env.LIQ_CONTROL === "1";
+const perStream: Record<string, number> = {};
 let stored = 0, received = 0, backoff = 1_000, stopping = false, socket: WebSocket | null = null, lastMessage = Date.now();
 let lastOpen = Date.now(), reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -40,19 +44,22 @@ function scheduleReconnect(reason: string) {
 
 function connect() {
   if (stopping) return;
-  const url = liquidationStreamUrl(symbols);
+  const url = liquidationStreamUrl(symbols, wsBase, control);
   const ws = new WebSocket(url);
   socket = ws;
   ws.onopen = () => {
     backoff = 1_000;
     lastOpen = Date.now();
     lastMessage = Date.now();
-    log("info", "connected", { symbols });
+    log("info", "connected", { symbols, url });
   };
   ws.onmessage = (ev) => {
     lastMessage = Date.now();
     received++;
-    const l = parseForceOrder(String(ev.data));
+    const raw = String(ev.data);
+    const st = streamOf(raw);
+    perStream[st] = (perStream[st] ?? 0) + 1;
+    const l = parseForceOrder(raw);
     if (l) store(l).catch((e) => log("error", "store failed", { error: e instanceof Error ? e.message : String(e) }));
   };
   ws.onerror = (ev) => {
@@ -80,7 +87,15 @@ setInterval(() => {
     scheduleReconnect("no message for 6h");
   }
 }, 60_000);
-setInterval(() => log("info", "stats", { received, stored }), 3600_000);
+// Every 5 minutes for the first hour (diagnostics), then hourly.
+const started = Date.now();
+let lastStats = 0;
+setInterval(() => {
+  const every = Date.now() - started < 3600_000 ? 5 * 60_000 : 3600_000;
+  if (Date.now() - lastStats < every) return;
+  lastStats = Date.now();
+  log("info", "stats", { received, stored, perStream });
+}, 60_000);
 
 async function shutdown() {
   stopping = true;

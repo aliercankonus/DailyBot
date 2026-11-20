@@ -213,6 +213,8 @@ services:
     environment:
       DATABASE_URL: *dburl
       LIQ_SYMBOLS: BTCUSDT,ETHUSDT
+      LIQ_WS_BASE: ${LIQ_WS_BASE:-wss://fstream.binance.com}
+      LIQ_CONTROL: "1"
     depends_on:
       migrate: { condition: service_completed_successfully }
     mem_limit: 128m

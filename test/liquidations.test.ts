@@ -18,3 +18,12 @@ describe("liquidation stream parsing", () => {
     expect(parseForceOrder(JSON.stringify({ data: { e: "forceOrder", o: { s: "BTCUSDT", S: "HOLD", p: "1", ap: "1", q: "1", T: 1 } } }))).toBeNull();
   });
 });
+
+describe("control stream (diagnostics)", () => {
+  it("adds a mark-price stream and names streams", async () => {
+    const { liquidationStreamUrl, streamOf } = await import("../src/collect/liquidations.js");
+    expect(liquidationStreamUrl(["BTCUSDT"], "wss://x", true)).toBe("wss://x/stream?streams=btcusdt@forceOrder/btcusdt@markPrice@1s");
+    expect(streamOf('{"stream":"btcusdt@markPrice@1s","data":{}}')).toBe("btcusdt@markPrice@1s");
+    expect(streamOf("{}")).toBe("?");
+  });
+});
