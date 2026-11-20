@@ -207,6 +207,23 @@ services:
 
   # Research data: Binance USD-M forced liquidations for BTC/ETH (public stream, no key) into the
   # main database, for the liquidation-cascade test (PROGRESS.md). Never trades.
+  # One-shot repair of engine A positions recorded without fill prices, from Binance trade history
+  # (read-only on Binance). REPAIR=dry prints, REPAIR=apply writes; unset = skipped. Unset it afterwards.
+  repair:
+    <<: *node
+    command: ["node", "dist/cli/repairTrades.js"]
+    environment:
+      REPAIR: ${REPAIR:-}
+      MODE: ${MODE:-paper}
+      DATABASE_URL: *db_a
+      BINANCE_API_KEY: ${BINANCE_API_KEY:-}
+      BINANCE_API_SECRET: ${BINANCE_API_SECRET:-}
+      BINANCE_BASE_URL: ${BINANCE_BASE_URL:-}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    mem_limit: 128m
+    restart: "no"
+
   liquidations:
     <<: *node
     command: ["node", "dist/cli/liquidations.js"]
