@@ -79,11 +79,22 @@ export class WeightsEngine {
 
   async tick(): Promise<void> {
     const { exchange: ex, repo, cfg } = this.d;
-    const balance = await ex.getBalance();
-    await this.trackEquity(balance.equity);
+    let balanceOk = true;
+    try {
+      const balance = await ex.getBalance();
+      await this.trackEquity(balance.equity);
+    } catch (e) {
+      // Protection first: without a balance, still honour the kill switch and check stops (as Engine does).
+      balanceOk = false;
+      await this.event("error", "BALANCE_ERROR", null, errMsg(e));
+    }
     const kill = (await repo.getState<KillSwitch>("killSwitch"))?.on ?? false;
     if (kill) {
       await this.flattenAll();
+      return;
+    }
+    if (!balanceOk) {
+      await this.ensureStops();
       return;
     }
     // The daily candle that closed most recently (UTC days, as on Binance).

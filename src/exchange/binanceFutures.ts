@@ -182,7 +182,10 @@ export class BinanceFutures implements Exchange {
 
   async getMarkPrice(symbol: string): Promise<number> {
     const r = await this.request<{ markPrice: string }>("GET", "/fapi/v1/premiumIndex", { symbol });
-    return Number(r.markPrice);
+    const mark = Number(r.markPrice);
+    // A missing or zero mark must never become a (paper) fill price; the caller retries next tick.
+    if (!(Number.isFinite(mark) && mark > 0)) throw new Error(`invalid mark price for ${symbol}: ${String(r.markPrice)}`);
+    return mark;
   }
 
   /** Raw klines including the forming candle (used by the paper simulator for intrabar stops). */

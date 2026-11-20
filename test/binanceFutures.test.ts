@@ -398,3 +398,14 @@ describe("account and market data", () => {
     expect(fills[1001]!.commission).toBe(0.5);
   });
 });
+
+describe("getMarkPrice", () => {
+  it("rejects a missing or zero mark price", async () => {
+    for (const markPrice of ["0", undefined, "abc"]) {
+      const { impl } = router({ "GET /fapi/v1/premiumIndex": { body: { symbol: "BTCUSDT", markPrice } } });
+      await expect(client(impl).getMarkPrice("BTCUSDT")).rejects.toThrow(/invalid mark price/);
+    }
+    const { impl } = router({ "GET /fapi/v1/premiumIndex": { body: { symbol: "BTCUSDT", markPrice: "61000.5" } } });
+    expect(await client(impl).getMarkPrice("BTCUSDT")).toBe(61000.5);
+  });
+});
