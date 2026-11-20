@@ -5,7 +5,7 @@ const sample = JSON.stringify({ stream: "btcusdt@forceOrder", data: { e: "forceO
 
 describe("liquidation stream parsing", () => {
   it("builds the combined stream url", () => {
-    expect(liquidationStreamUrl(["BTCUSDT", "ETHUSDT"])).toBe("wss://fstream.binance.com/stream?streams=btcusdt@forceOrder/ethusdt@forceOrder");
+    expect(liquidationStreamUrl(["BTCUSDT", "ETHUSDT"])).toBe("wss://fstream.binance.com/market/stream?streams=btcusdt@forceOrder/ethusdt@forceOrder");
   });
   it("parses a forceOrder event (SELL = long liquidated)", () => {
     const l = parseForceOrder(sample)!;

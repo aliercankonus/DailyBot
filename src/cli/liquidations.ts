@@ -1,7 +1,7 @@
 // Liquidation collector: listens to Binance USD-M !forceOrder for LIQ_SYMBOLS and stores every
 // event in the main database (table liquidations). Research data only; it never trades.
 // Env: DATABASE_URL (main db), LIQ_SYMBOLS (default BTCUSDT,ETHUSDT), LIQ_WS_BASE (default
-// wss://fstream.binance.com), LIQ_CONTROL=1 adds a mark-price control stream (diagnostics).
+// wss://fstream.binance.com/market; the legacy route without /market connects but sends nothing), LIQ_CONTROL=1 adds a mark-price control stream (diagnostics).
 import { writeFile } from "node:fs/promises";
 import pg from "pg";
 import { liquidationStreamUrl, parseForceOrder, streamOf, type Liquidation } from "../collect/liquidations.js";
@@ -17,7 +17,7 @@ const pool = new pg.Pool({ connectionString: dbUrl, max: 2 });
 const log = (level: string, msg: string, extra: Record<string, unknown> = {}) =>
   console.log(JSON.stringify({ level, msg, ...extra, time: new Date().toISOString() }));
 
-const wsBase = process.env.LIQ_WS_BASE || "wss://fstream.binance.com";
+const wsBase = process.env.LIQ_WS_BASE || "wss://fstream.binance.com/market";
 const control = process.env.LIQ_CONTROL === "1";
 const perStream: Record<string, number> = {};
 let stored = 0, received = 0, backoff = 1_000, stopping = false, socket: WebSocket | null = null, lastMessage = Date.now();

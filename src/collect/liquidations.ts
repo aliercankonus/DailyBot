@@ -15,7 +15,7 @@ export interface Liquidation {
  * Combined stream URL. `control` adds a stream that always ticks (mark price, 1 s) so a dead route
  * can be told apart from a quiet market (2026-11-20: 0 liquidation messages in 9 h).
  */
-export const liquidationStreamUrl = (symbols: string[], base = "wss://fstream.binance.com", control = false) =>
+export const liquidationStreamUrl = (symbols: string[], base = "wss://fstream.binance.com/market", control = false) =>
   `${base}/stream?streams=${[...symbols.map((s) => `${s.toLowerCase()}@forceOrder`), ...(control ? [`${symbols[0]!.toLowerCase()}@markPrice@1s`] : [])].join("/")}`;
 
 /** Stream name of a combined-stream message ("btcusdt@forceOrder"), or "?" */
