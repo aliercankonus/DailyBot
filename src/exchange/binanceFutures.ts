@@ -270,13 +270,31 @@ export class BinanceFutures implements Exchange {
         reduceOnly: p.reduceOnly ? "true" : undefined,
         newClientOrderId: p.clientOrderId, newOrderRespType: "RESULT",
       }, true);
-      return toFill(r);
+      const fill = toFill(r);
+      // Seen on the Binance demo: FILLED with executedQty but avgPrice and cumQuote "0".
+      return fill.executedQty > 0 && !(fill.avgPrice > 0) ? await this.resolveFillPrice(p.symbol, fill) : fill;
     } catch (e) {
       // Timeout or 5xx: the order may still have been accepted. Look it up before giving up.
       const again = await this.findOrder(p.symbol, p.clientOrderId).catch(() => null);
       if (again) return again;
       throw e;
     }
+  }
+
+  /**
+   * A filled order reported without a price: query the order again, then fall back to the
+   * account's trades for that order id. Returns the fill unchanged (avgPrice 0) if both fail;
+   * the engine then refuses to derive prices from it.
+   */
+  private async resolveFillPrice(symbol: string, fill: Fill): Promise<Fill> {
+    for (let i = 0; i < 3; i++) {
+      await this.sleep(400);
+      const again = await this.findOrder(symbol, fill.clientOrderId).catch(() => null);
+      if (again && again.avgPrice > 0) return { ...fill, avgPrice: again.avgPrice };
+    }
+    const trades = (await this.getFills(symbol, Date.now() - 10 * 60_000).catch(() => [] as TradeFill[])).filter((t) => t.orderId === fill.orderId);
+    const qty = trades.reduce((a, t) => a + t.qty, 0);
+    return qty > 0 ? { ...fill, avgPrice: trades.reduce((a, t) => a + t.price * t.qty, 0) / qty } : fill;
   }
 
   private async findOrder(symbol: string, clientOrderId: string): Promise<Fill | null> {
@@ -421,6 +439,7 @@ export class BinanceFutures implements Exchange {
           time: Number(x.time), price: Number(x.price), qty: Number(x.qty), side: x.side,
           realizedPnl: Number(x.realizedPnl),
           commission: asset === undefined || asset === "USDT" ? Number(x.commission) : 0,
+          ...(x.orderId !== undefined ? { orderId: String(x.orderId) } : {}),
         });
       }
       if (page.length < FILLS_PAGE) break;

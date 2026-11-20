@@ -46,6 +46,8 @@ export class FakeExchange implements Exchange {
   /** When set, placeStop throws this error (takes precedence over failPlaceStop). */
   placeStopError: Error | null = null;
   failMarket = false;
+  /** Binance demo quirk: FILLED market orders reported with avgPrice 0. */
+  zeroFillPrice = false;
   failBalance = false;
   lastCandleLimit = 0;
   leverage: Record<string, number> = {};
@@ -75,7 +77,9 @@ export class FakeExchange implements Exchange {
     } else {
       this.positions[p.symbol] = { symbol: p.symbol, side: p.side === "BUY" ? "LONG" : "SHORT", quantity: p.quantity, entryPrice: px };
     }
-    const f: Fill = { orderId: `O${this.seq++}`, clientOrderId: p.clientOrderId, status: "FILLED", executedQty: p.quantity, avgPrice: px };
+    const orderId = `O${this.seq++}`;
+    (this.fills[p.symbol] ??= []).push({ time: this.now, price: px, qty: p.quantity, side: p.side, realizedPnl: 0, commission: 0, orderId });
+    const f: Fill = { orderId, clientOrderId: p.clientOrderId, status: "FILLED", executedQty: p.quantity, avgPrice: this.zeroFillPrice ? 0 : px };
     this.orders.set(p.clientOrderId, f);
     return f;
   }

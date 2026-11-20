@@ -61,6 +61,8 @@ export interface TradeFill {
   side: "BUY" | "SELL";
   realizedPnl: number;
   commission: number;
+  /** Exchange order id of the fill, when the exchange reports it. */
+  orderId?: string;
 }
 
 /**

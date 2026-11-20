@@ -366,7 +366,16 @@ export class Engine {
       await this.event("warn", "ENTRY_NOT_FILLED", signal.symbol, `status ${fill.status}`);
       return;
     }
-    await this.openPosition(signal.symbol, pending, fill.avgPrice, fill.executedQty);
+    let entryPrice = fill.avgPrice;
+    if (!(entryPrice > 0)) {
+      // Never derive the stop from a missing price (2026-11-19 demo incident: avgPrice 0 -> stop 1955 on BTC).
+      const live = await ex.getPosition(signal.symbol).catch(() => null);
+      const fromExchange = !!live && live.entryPrice > 0;
+      entryPrice = fromExchange ? live!.entryPrice : signal.refPrice;
+      await this.event("error", "FILL_PRICE_MISSING", signal.symbol,
+        `entry fill reported without a price; using the ${fromExchange ? "exchange position entry" : "signal price"} ${entryPrice}`);
+    }
+    await this.openPosition(signal.symbol, pending, entryPrice, fill.executedQty);
     await repo.setState(pendingKey, null);
   }
 
@@ -451,6 +460,13 @@ export class Engine {
     }
   }
 
+  /** Volume-weighted price of this account's fills on `side` in the last 5 minutes, or null. */
+  private async recentFillPrice(symbol: string, side: "BUY" | "SELL"): Promise<number | null> {
+    const fills = (await this.d.exchange.getFills(symbol, this.now() - 5 * 60_000).catch(() => [])).filter((f) => f.side === side);
+    const qty = fills.reduce((a, f) => a + f.qty, 0);
+    return qty > 0 ? fills.reduce((a, f) => a + f.price * f.qty, 0) / qty : null;
+  }
+
   async closeAtMarket(pos: PositionRow, reason: string, opts: { recheckOnFailure?: boolean } = {}): Promise<void> {
     const ex = this.d.exchange;
     try {
@@ -465,11 +481,15 @@ export class Engine {
         return;
       }
       await this.cancelOurStops(pos.symbol, await ex.getOpenStops(pos.symbol));
-      const gross = (pos.side === "LONG" ? fill.avgPrice - pos.entryPrice : pos.entryPrice - fill.avgPrice) * fill.executedQty;
+      let exitPrice: number | null = fill.avgPrice > 0 ? fill.avgPrice : await this.recentFillPrice(pos.symbol, closingSide(pos.side));
+      if (exitPrice === null) {
+        await this.event("error", "FILL_PRICE_MISSING", pos.symbol, `market close (${reason}) filled without a price; PnL unknown, check the exchange trade history`);
+      }
+      const gross = exitPrice === null ? null : (pos.side === "LONG" ? exitPrice - pos.entryPrice : pos.entryPrice - exitPrice) * fill.executedQty;
       await this.d.repo.updatePosition(pos.id, {
-        status: "CLOSED", exitPrice: fill.avgPrice, exitTime: this.now(), exitReason: reason, realizedPnl: gross,
+        status: "CLOSED", exitPrice, exitTime: this.now(), exitReason: reason, realizedPnl: gross,
       });
-      await this.notify("warn", `${pos.symbol} closed at market (${reason}) @ ${fill.avgPrice}`);
+      await this.notify("warn", `${pos.symbol} closed at market (${reason}) @ ${exitPrice ?? "unknown price"}`);
     } catch (e) {
       if (opts.recheckOnFailure) {
         // E.g. the exchange stop filled first and the reduce-only order was rejected: nothing to do.

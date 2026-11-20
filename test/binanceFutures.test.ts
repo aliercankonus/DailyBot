@@ -207,6 +207,16 @@ describe("marketOrder", () => {
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
   });
 
+  it("a FILLED order reported with avgPrice 0 is priced from a second lookup, then from the trades", async () => {
+    const zero = { body: { orderId: 7, clientOrderId: "cid", status: "FILLED", executedQty: "0.03", avgPrice: "0", cumQuote: "0" } };
+    const priced = { body: { orderId: 7, clientOrderId: "cid", status: "FILLED", executedQty: "0.03", avgPrice: "61500.5", cumQuote: "1845.015" } };
+    const a = router({ ...INFO_ROUTE, "GET /fapi/v1/order": [notFound, priced], "POST /fapi/v1/order": zero });
+    expect((await client(a.impl).marketOrder(p)).avgPrice).toBe(61500.5);
+    const b = router({ ...INFO_ROUTE, "GET /fapi/v1/order": [notFound, zero], "POST /fapi/v1/order": zero,
+      "GET /fapi/v1/userTrades": { body: [{ id: 1, orderId: 7, time: 1, price: "61000", qty: "0.01", side: "BUY", realizedPnl: "0", commission: "0" }, { id: 2, orderId: 7, time: 2, price: "62000", qty: "0.02", side: "BUY", realizedPnl: "0", commission: "0" }, { id: 3, orderId: 9, time: 3, price: "1", qty: "5", side: "BUY", realizedPnl: "0", commission: "0" }] } });
+    expect((await client(b.impl).marketOrder(p)).avgPrice).toBeCloseTo((61000 * 0.01 + 62000 * 0.02) / 0.03);
+  });
+
   it("rethrows the original error when the lookup says -2013", async () => {
     const { impl } = router({ ...INFO_ROUTE, "GET /fapi/v1/order": notFound, "POST /fapi/v1/order": { status: 400, body: { code: -2019, msg: "Margin is insufficient." } } });
     const err = await client(impl).marketOrder(p).catch((e) => e);

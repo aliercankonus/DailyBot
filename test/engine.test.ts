@@ -101,6 +101,32 @@ describe("engine entry", () => {
   });
 });
 
+describe("fill reported without a price (2026-11-19 demo incident)", () => {
+  it("derives the stop from the exchange position entry, not from 0", async () => {
+    ex.zeroFillPrice = true;
+    at(signalIdx);
+    await engine.tick();
+    const pos = (await repo.getOpenPosition("BTCUSDT"))!;
+    expect(pos).not.toBeNull();
+    expect(pos.entryPrice).toBe(allCandles[signalIdx]!.close);
+    expect(pos.stop).toBeLessThan(pos.entryPrice); // the fixture signals LONG
+    expect(pos.stop).toBeGreaterThan(pos.entryPrice * 0.5);
+    expect(repo.events.some((e) => e.kind === "FILL_PRICE_MISSING")).toBe(true);
+    expect(ex.stops).toHaveLength(1);
+  });
+  it("prices a market close from the account's fills when the fill has no price", async () => {
+    at(signalIdx);
+    await engine.tick();
+    ex.zeroFillPrice = true;
+    ex.now += 60_000;
+    const pos = (await repo.getOpenPosition("BTCUSDT"))!;
+    await engine.closeAtMarket(pos, "TEST");
+    const closed = repo.positions[0]!;
+    expect(closed.status).toBe("CLOSED");
+    expect(closed.exitPrice).toBe(ex.mark.BTCUSDT);
+  });
+});
+
 describe("decision log", () => {
   it("stores why a closed candle gave no entry (gate NO_SIGNAL), once per candle", async () => {
     at(signalIdx - 3);
