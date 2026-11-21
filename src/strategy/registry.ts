@@ -42,6 +42,15 @@ export const STRATEGIES = {
     integerKeys: new Set(["entryLookback", "emaFast", "emaSlow", "atrPeriod"]),
     create: (p) => createTrendBreakout({ ...DEFAULT_TREND_BREAKOUT, maxAtrPct: 0.03, ...p }),
   },
+  // A-LV plus the funding crowding filter (round 21, pre-registered: 90th percentile over 90 days = 540 4h
+  // candles; passed in both halves). Live for A since 2026-11-21 as trendlvfc+timestop+befee.
+  trendlvfc: {
+    label: "A-LV-FC",
+    interval: "4h",
+    defaults: { ...DEFAULT_TREND_BREAKOUT, maxAtrPct: 0.03, fundingCrowdPct: 0.9, fundingCrowdBars: 540 },
+    integerKeys: new Set(["entryLookback", "emaFast", "emaSlow", "atrPeriod", "fundingCrowdBars"]),
+    create: (p) => createTrendBreakout({ ...DEFAULT_TREND_BREAKOUT, maxAtrPct: 0.03, fundingCrowdPct: 0.9, fundingCrowdBars: 540, ...p }),
+  },
   // A-LV plus order-flow confirmation (round 13, pre-registered at 0.5: the breakout candle's
   // aggressive volume must be majority on the trade's side). Research only until it passes.
   trendlvtk: {

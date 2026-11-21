@@ -28,6 +28,14 @@ export interface TrendBreakoutParams {
    * Research only: when either value is missing the filter does not block (live has no OI data).
    */
   oiLookback: number;
+  /**
+   * Funding crowding filter (0 = off), round 21: no long when the last settled funding rate at the
+   * signal close is above this percentile of the previous fundingCrowdBars candles' rates, no short
+   * when it is below the mirror percentile (1 - pct). Needs candle.fundingRate (needsFunding).
+   * A candle without funding data, or too little history, never blocks.
+   */
+  fundingCrowdPct: number;
+  fundingCrowdBars: number;
 }
 
 export const DEFAULT_TREND_BREAKOUT: TrendBreakoutParams = {
@@ -40,15 +48,39 @@ export const DEFAULT_TREND_BREAKOUT: TrendBreakoutParams = {
   maxAtrPct: 0,
   minTakerShare: 0,
   oiLookback: 0,
+  fundingCrowdPct: 0,
+  fundingCrowdBars: 540,
 };
+
+/**
+ * Funding crowding check for a signal on the last candle: true when the trade's side is crowded
+ * (funding at or beyond the percentile of the previous `bars` candles' rates). Uses only candles
+ * up to the signal candle. Returns null when the filter cannot be evaluated.
+ */
+export function fundingCrowded(candles: Candle[], side: "LONG" | "SHORT", pct: number, bars: number): boolean | null {
+  const i = candles.length - 1;
+  const now = candles[i]?.fundingRate;
+  if (now === undefined || !Number.isFinite(now)) return null;
+  const hist: number[] = [];
+  for (let j = Math.max(0, i - bars); j < i; j++) {
+    const f = candles[j]!.fundingRate;
+    if (f !== undefined && Number.isFinite(f)) hist.push(f);
+  }
+  if (hist.length < bars * 0.9) return null;
+  hist.sort((a, b) => a - b);
+  const hi = hist[Math.floor(pct * (hist.length - 1))]!;
+  const lo = hist[Math.floor((1 - pct) * (hist.length - 1))]!;
+  return side === "LONG" ? now > hi : now < lo;
+}
 
 export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAKOUT): Strategy {
   const warmup = Math.max(p.emaSlow, p.entryLookback + 1, p.atrPeriod) + 1;
 
   return {
-    name: `trend-breakout(${p.entryLookback},${p.emaFast}/${p.emaSlow},atr${p.atrPeriod}x${p.stopAtr}/${p.trailAtr}${p.maxAtrPct > 0 ? `,atr<${p.maxAtrPct * 100}%` : ""}${p.minTakerShare > 0 ? `,taker>=${p.minTakerShare}` : ""}${p.oiLookback > 0 ? `,oi>${p.oiLookback}b` : ""})`,
+    name: `trend-breakout(${p.entryLookback},${p.emaFast}/${p.emaSlow},atr${p.atrPeriod}x${p.stopAtr}/${p.trailAtr}${p.maxAtrPct > 0 ? `,atr<${p.maxAtrPct * 100}%` : ""}${p.minTakerShare > 0 ? `,taker>=${p.minTakerShare}` : ""}${p.oiLookback > 0 ? `,oi>${p.oiLookback}b` : ""}${p.fundingCrowdPct > 0 ? `,fund<p${p.fundingCrowdPct * 100}/${p.fundingCrowdBars}b` : ""})`,
     interval: "4h",
     warmup,
+    needsFunding: p.fundingCrowdPct > 0,
 
     evaluate(symbol: string, candles: Candle[]): Signal | null {
       if (candles.length < warmup) return null;
@@ -68,7 +100,8 @@ export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAK
       const oiNow = c.openInterest, oiThen = candles[i - p.oiLookback]?.openInterest;
       const oiOk = p.oiLookback <= 0 || oiNow === undefined || oiThen === undefined || oiNow > oiThen;
       const flowOk = (side: "LONG" | "SHORT") =>
-        oiOk && (p.minTakerShare <= 0 || (buyShare !== null && (side === "LONG" ? buyShare : 1 - buyShare) >= p.minTakerShare));
+        oiOk && (p.minTakerShare <= 0 || (buyShare !== null && (side === "LONG" ? buyShare : 1 - buyShare) >= p.minTakerShare))
+        && (p.fundingCrowdPct <= 0 || fundingCrowded(candles, side, p.fundingCrowdPct, p.fundingCrowdBars) !== true);
 
       if (c.close > hi && fast > slow && c.close > slow && flowOk("LONG")) {
         return {
@@ -113,6 +146,12 @@ export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAK
       const bs = takerBuyShare(candles[i]!);
       if (p.minTakerShare > 0) parts.push(`taker buy ${bs === null ? "n/a" : pct(bs)} (needs >= ${pct(p.minTakerShare)} on the trade side)`);
       if (p.maxAtrPct > 0) parts.push(`atr ${pct(a / c)} (${a / c >= p.maxAtrPct ? "BLOCKED" : "ok"}, max ${pct(p.maxAtrPct)})`);
+      if (p.fundingCrowdPct > 0) {
+        const f = candles[i]!.fundingRate;
+        const side = trend === "down" ? "SHORT" : "LONG";
+        const crowded = trend === "mixed" ? null : fundingCrowded(candles, side, p.fundingCrowdPct, p.fundingCrowdBars);
+        parts.push(`funding ${f === undefined ? "n/a" : `${(f * 100).toFixed(4)}%`}${crowded === true ? ` (BLOCKED: ${side.toLowerCase()} side crowded)` : crowded === false ? " (ok)" : ""}`);
+      }
       const wait = trend === "up" ? "long needs close above the high" : trend === "down" ? "short needs close below the low" : "no trade until the EMAs and price agree";
       return `${parts.join("; ")}; ${wait}`;
     },

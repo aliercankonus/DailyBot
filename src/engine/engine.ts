@@ -246,8 +246,14 @@ export class Engine {
 
     if (strategy.needsFunding) {
       // Same attachment rule as the backtest: the last rate settled at or before each close.
-      const funding = await ex.getFundingHistory(symbol, candles[0]!.openTime - 8 * 3600_000);
-      candles = attachFunding(candles, funding);
+      // A failed funding fetch must not stop position management: continue without funding
+      // (funding-based filters never block on missing data) and record why.
+      try {
+        const funding = await ex.getFundingHistory(symbol, candles[0]!.openTime - 8 * 3600_000);
+        candles = attachFunding(candles, funding);
+      } catch (e) {
+        await this.event("warn", "FUNDING_UNAVAILABLE", symbol, `funding history failed, deciding without it: ${errMsg(e)}`);
+      }
     }
 
     const pos = await repo.getOpenPosition(symbol);
