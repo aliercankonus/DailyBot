@@ -460,6 +460,10 @@ Search finding: no public strategy with a verified live record; most "best" clai
 | T4 pullback-in-trend entry (RSI(3) < 20 / > 80 in A's trend; "reversion layer") | 717 / 1.02 / 0.018R | 270 / 1.31 / 0.142R | 4.3k | FAIL |
 T2 robustness (IS PF / OOS PF / net): p85 2.13 / 1.60 / 23.8k; p95 1.87 / 1.42 / 20.5k; 60d 1.94 / 1.56 / 22.1k; 120d 2.00 / 1.44 / 21.2k; p80 2.28 / 1.75 / 25.8k. IS improves in every variant; OOS improves in 4 of 6, flat in 2 (p95, 120d); both symbols improve (BTC PF 1.58 -> 1.68, ETH 1.62 -> 1.87); gain mostly 2022-2023, 2025-26 about equal. Reading: entering a breakout when the perp is already crowded on that side tends to fail; a real but modest out-of-sample effect. Candidate for A (needs a funding-aware trendlv variant; live engine already attaches funding for needsFunding strategies). Not deployed: owner's decision.
 
+### 2026-11-21 — Round 22: Fibonacci retracement entries (owner question)
+Pre-registered: A's trend (EMA50 vs EMA200), 50-bar impulse (low before high for longs), enter when a candle touches the retracement level and closes back on the trend side, stop beyond the 78.6% level, A's exits (chandelier, time stop, befee). Control: the same rule at non-Fibonacci ratios. BTC+ETH 4h 2020-01..2026-11-20 (IS PF / OOS PF / net, 2 x 10k): A live breakout 1.71 / 1.45 / 19.2k; 0.382 0.94 / 1.41 / 1.4k; 0.45 1.08 / 1.42 / 3.7k; 0.50 1.14 / 1.09 / 2.5k; 0.55 1.19 / 1.55 / 6.4k; 0.618 1.08 / 1.74 / 6.0k; 0.70 0.75 / 1.90 / 1.0k.
+Conclusion: 0.618 is not special (0.55 beats it before 2025, 0.70 beats it after); every ratio is near break-even before 2025 and better after, i.e. a regime effect, not a Fibonacci effect. All far below the breakout (net 1-6k vs 19k). Not adopted.
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
