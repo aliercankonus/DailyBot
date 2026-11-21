@@ -430,6 +430,19 @@ Question: the live engines missed the 5.11-20.11 fall (backtest GC +6.4R/+6.8R, 
 | TS tsmom4h | +0.05R (n=950) | -0.05R (n=390) | +0.22R / +0.20R | FAIL (OOS negative) |
 Conclusion: no change. Joining mid-trend is worth much less than a fresh signal (the good part of the move is usually gone, and the current stop is often far); only A is marginally positive and not robust in IS. Missing an ongoing trend after a start is a one-off cost of starting, not a recurring loss. Script: session scratchpad join.mts (not committed).
 
+### 2026-11-21 — Round 20: native 15m strategies, holding as long as the exits allow (owner request)
+Pre-registered, default parameters, BTC+ETH 2021-01..2026-11-20 15m (data.binance.vision), split 2025-01-01, 1% risk. Costs: taker 0.05% + slippage 0.05% per side (standard); sensitivity "maker" 0.02% + 0.01% (optimistic: assumes every order, stops included, fills as a limit order).
+| strategy (15m) | trades IS/OOS | IS PF | OOS PF | maker IS / OOS PF | avg hold |
+|---|---|---|---|---|---|
+| S1 Donchian-20 breakout, A rules | 5412 / 2671 | 0.72 | 0.70 | 0.90 / 0.89 | 2.8h |
+| S2 S1 + only with the 4h EMA50/200 trend | 3047 / 1506 | 0.69 | 0.68 | 0.89 / 0.90 | 2.8h |
+| S3 Golden cross EMA50/200 | 1192 / 614 | 0.94 | 0.79 | 1.08 / 0.94 | 31.8h |
+| S4 S3 + only with the 4h trend | 772 / 395 | 0.86 | 0.91 | 1.01 / 1.06 | 30.0h |
+| S5 Supertrend(10,3) | 5847 / 3048 | 0.82 | 0.83 | 0.96 / 1.03 | 8.6h |
+| S6 mean reversion (strategy C) | 4154 / 2054 | 0.51 | 0.32 | 0.76 / 0.66 | 1.2h |
+| S7 intraday momentum (Shen et al. 2022: 00:00-00:30 UTC sign -> 23:30-24:00) | 1460 / 689 days | gross -0.7 / +0.4 bp per trade (BTC/ETH), hit 50-51% | | net -5 to -7 bp even at maker cost | 30 min |
+Conclusion: nothing works on 15m. With real (taker) costs every strategy loses in both periods; even the optimistic maker case is break-even at best. Cause: on 15m the stop is ~0.5-1% away, so the 0.2% round trip costs 0.2-0.4R per trade (on 4h ~0.06R), and 15m breakouts are mostly noise. Holding longer (S3/S4, ~30h) does not fix it. Consistent with Laly (2025): no 15-300 minute momentum/contrarian strategy beats the benchmark after costs. Script: scratchpad m15.mts (not committed).
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
