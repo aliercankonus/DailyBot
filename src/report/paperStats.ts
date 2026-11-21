@@ -21,7 +21,8 @@ export interface Expectation {
  * 2020-01 to 2026-11, 2513 days, 1% risk per trade). ST, GLS: the phase-1 20-coin engines (rounds 8-10).
  */
 export const EXPECTATIONS: Record<string, Expectation> = {
-  A: { label: "A-LV + time stop (4h, BTC/ETH)", tradesPer30d: (490 / 2513) * 30, winRate: 0.33, profitFactor: 1.52, avgR: 0.31, annualVol: 0.168, maxDrawdown: 0.189 },
+  // A runs with be (stop to entry + 0.2% at MFE 1R) since 2026-11-21 (owner's decision; PROGRESS.md 2026-11-21).
+  A: { label: "A-LV + time stop + be (4h, BTC/ETH)", tradesPer30d: (497 / 2513) * 30, winRate: 0.39, profitFactor: 1.55, avgR: 0.32, annualVol: 0.166, maxDrawdown: 0.184 },
   // GC runs with be2 (stop to entry at MFE 2R) since 2026-11-19 (PROGRESS.md round 15/17).
   GC: { label: "Golden cross EMA50/200 + be2 (1h, BTC/ETH)", tradesPer30d: (574 / 2513) * 30, winRate: 0.20, profitFactor: 1.44, avgR: 0.41, annualVol: 0.321, maxDrawdown: 0.257 },
   TS: { label: "Time-series momentum (4h, BTC/ETH, long only)", tradesPer30d: (267 / 2513) * 30, winRate: 0.31, profitFactor: 1.9, avgR: 0.36, annualVol: 0.126, maxDrawdown: 0.146 },
