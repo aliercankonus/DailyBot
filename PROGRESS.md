@@ -448,6 +448,17 @@ Pre-registered, default parameters, BTC+ETH 2021-01..2026-11-20 15m (data.binanc
 | S7 intraday momentum (Shen et al. 2022: 00:00-00:30 UTC sign -> 23:30-24:00) | 1460 / 689 days | gross -0.7 / +0.4 bp per trade (BTC/ETH), hit 50-51% | | net -5 to -7 bp even at maker cost | 30 min |
 Conclusion: nothing works on 15m. With real (taker) costs every strategy loses in both periods; even the optimistic maker case is break-even at best. Cause: on 15m the stop is ~0.5-1% away, so the 0.2% round trip costs 0.2-0.4R per trade (on 4h ~0.06R), and 15m breakouts are mostly noise. Holding longer (S3/S4, ~30h) does not fix it. Consistent with Laly (2025): no 15-300 minute momentum/contrarian strategy beats the benchmark after costs. Script: scratchpad m15.mts (not committed).
 
+### 2026-11-21 — Round 21: ideas from a wide search (web, YouTube write-ups, GitHub/freqtrade, Claude skill repos)
+Search finding: no public strategy with a verified live record; most "best" claims are unverifiable backtests or overfit (freqtrade showcase repos, a viral TradingView rebuild at coin-flip odds). Testable ideas from the literature and write-ups, each on A live (trendlv+timestop+befee), BTC+ETH 4h 2020-01..2026-11-20, pre-registered pass = PF and E better than A+befee in both halves:
+| idea | IS n / PF / E | OOS n / PF / E | net (2 x 10k) | verdict |
+|---|---|---|---|---|
+| A+befee (live) | 347 / 1.71 / 0.342R | 152 / 1.45 / 0.255R | 19.2k | - |
+| T1 no entries from weekend candles (weekend-effect papers) | 314 / 1.72 / 0.336R | 133 / 1.67 / 0.346R | 18.1k | FAIL (IS E lower) |
+| T2 funding crowding: skip longs when the last funding > its 90-day 90th pct, shorts < 10th | 309 / 2.00 / 0.433R | 133 / 1.51 / 0.285R | 22.3k | PASS |
+| T3 only after volatility contraction (ATR% < 100-bar median; squeeze idea) | 225 / 1.84 / 0.398R | 89 / 1.34 / 0.175R | 12.0k | FAIL |
+| T4 pullback-in-trend entry (RSI(3) < 20 / > 80 in A's trend; "reversion layer") | 717 / 1.02 / 0.018R | 270 / 1.31 / 0.142R | 4.3k | FAIL |
+T2 robustness (IS PF / OOS PF / net): p85 2.13 / 1.60 / 23.8k; p95 1.87 / 1.42 / 20.5k; 60d 1.94 / 1.56 / 22.1k; 120d 2.00 / 1.44 / 21.2k; p80 2.28 / 1.75 / 25.8k. IS improves in every variant; OOS improves in 4 of 6, flat in 2 (p95, 120d); both symbols improve (BTC PF 1.58 -> 1.68, ETH 1.62 -> 1.87); gain mostly 2022-2023, 2025-26 about equal. Reading: entering a breakout when the perp is already crowded on that side tends to fail; a real but modest out-of-sample effect. Candidate for A (needs a funding-aware trendlv variant; live engine already attaches funding for needsFunding strategies). Not deployed: owner's decision.
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
