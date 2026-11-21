@@ -119,6 +119,9 @@ export const EXIT_PRESETS: Record<string, ExitOverlay> = {
   // 28 of 60 that reached 3-5R ended as losers). All are wide, so 1h noise should not stop a trend.
   // be2: stop to entry once MFE >= 2R.
   be2: { breakEvenAt: 2, breakEvenBuffer: 0.002 },
+  // befee: at MFE 1R the stop goes to entry + 0.3%, enough to cover round-trip fees, slippage and funding
+  // (live for A since 2026-11-21; with 0.2% about a third of break-even exits still closed slightly negative).
+  befee: { breakEvenAt: 1, breakEvenBuffer: 0.003 },
   // ±20% robustness of be2's trigger.
   be2lo: { breakEvenAt: 1.6, breakEvenBuffer: 0.002 },
   be2hi: { breakEvenAt: 2.4, breakEvenBuffer: 0.002 },
