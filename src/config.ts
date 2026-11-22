@@ -13,6 +13,12 @@ const Env = z.object({
   BINANCE_API_KEY: z.string().default(""),
   BINANCE_API_SECRET: z.string().default(""),
   BINANCE_BASE_URL: z.string().url().optional(),
+  /**
+   * Testnet only: read candles and funding (the strategy's inputs) from this public market-data URL
+   * (e.g. https://fapi.binance.com) instead of the demo exchange; orders, stops and the account stay
+   * on BINANCE_BASE_URL. Unset = everything from BINANCE_BASE_URL.
+   */
+  MARKET_DATA_BASE_URL: z.string().url().refine((u) => u.startsWith("https://"), "MARKET_DATA_BASE_URL must be https").optional(),
   BINANCE_STOP_API: z.enum(["algo", "legacy", "auto"]).default("auto"),
   SYMBOLS: z.string().default("BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT"),
   INTERVAL: z.string().refine((v) => Object.hasOwn(INTERVAL_MS, v), "unsupported interval").default("4h"),
@@ -71,6 +77,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, role: ConfigRol
     if (e.MODE !== "paper" && e.ALLOW_UNREGISTERED_ACCOUNT !== "1" && (!e.REGISTRY_DATABASE_URL || !e.BOT_NAME)) {
       throw new Error(`MODE=${e.MODE} requires REGISTRY_DATABASE_URL and BOT_NAME (one Binance account per engine); set ALLOW_UNREGISTERED_ACCOUNT=1 only for a single engine`);
     }
+  }
+  if (e.MARKET_DATA_BASE_URL && e.MODE !== "testnet") {
+    throw new Error("MARKET_DATA_BASE_URL is for MODE=testnet only (paper and live already read real market data)");
   }
   if (role === "api" && !e.API_TOKEN) throw new Error("API_TOKEN is required for the API process");
   const defaultBase = e.MODE === "testnet" ? "https://demo-fapi.binance.com" : "https://fapi.binance.com";

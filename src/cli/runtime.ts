@@ -5,6 +5,7 @@ import { PgRepo } from "../db/pgRepo.js";
 import { BinanceFutures } from "../exchange/binanceFutures.js";
 import { newPaperState, PaperExchange, type PaperState } from "../exchange/paper.js";
 import type { Exchange } from "../exchange/types.js";
+import { MarketDataSplit } from "../exchange/marketDataSplit.js";
 import { consoleNotifier, telegramNotifier, type Notifier } from "../notify/notifier.js";
 
 export function makePool(cfg: Pick<AppConfig, "DATABASE_URL">) {
@@ -34,5 +35,10 @@ export async function makeExchange(cfg: AppConfig, repo: PgRepo): Promise<{ exch
     apiKey: cfg.BINANCE_API_KEY, apiSecret: cfg.BINANCE_API_SECRET, baseUrl: cfg.baseUrl, stopOrderApi: cfg.BINANCE_STOP_API,
   });
   await ex.syncTime();
+  if (cfg.MODE === "testnet" && cfg.MARKET_DATA_BASE_URL) {
+    // Public data only (no key is sent): decisions on real prices, orders on the demo account.
+    const md = new BinanceFutures({ apiKey: "", apiSecret: "", baseUrl: cfg.MARKET_DATA_BASE_URL, stopOrderApi: "legacy" });
+    return { exchange: new MarketDataSplit(ex, md), persist: async () => {} };
+  }
   return { exchange: ex, persist: async () => {} };
 }
