@@ -5,6 +5,7 @@
 // whether a 30-trade post-mortem is due.
 import pg from "pg";
 import { deviations, EXPECTATIONS, paperStats, POST_MORTEM_EVERY, type PaperStats } from "../report/paperStats.js";
+import { distinctReasons } from "../report/decisions.js";
 
 const pct = (x: number | null, d = 1) => (x === null ? "n/a" : `${(x * 100).toFixed(d)}%`);
 const num = (x: number | null, d = 2) => (x === null ? "n/a" : Number.isFinite(x) ? x.toFixed(d) : "inf");
@@ -42,6 +43,13 @@ for (const { bot, url } of dbs) {
     for (const r of errors) console.log(`  error ${new Date(Number(r.created_at)).toISOString()} ${r.kind} ${r.symbol ?? ""} ${r.message}`);
     const flags = deviations(s, e);
     console.log(flags.length ? `CHECK: ${flags.join("; ")}` : "no deviation from the backtest beyond the thresholds");
+    // Decision log: distinct reasons why no order was placed (all candles in this database).
+    const sig = (await pool.query("SELECT symbol, gate, detail, candle_open_time FROM signals WHERE accepted = false ORDER BY candle_open_time")).rows
+      .map((r) => ({ symbol: String(r.symbol), gate: r.gate as string | null, detail: String(r.detail), candleOpenTime: Number(r.candle_open_time) }));
+    const groups = distinctReasons(sig);
+    const t = (ms: number) => new Date(ms).toISOString().slice(5, 16).replace("T", " ");
+    console.log(`decisions without an order: ${sig.length} candles, ${groups.length} distinct reasons`);
+    for (const g of groups) console.log(`  DECISION ${g.symbol} ${g.gate} x${g.count} [${t(g.firstCandle)} .. ${t(g.lastCandle)}] | ${g.example}`);
     if (s.trades >= POST_MORTEM_EVERY) console.log(`POST-MORTEM: ${s.trades} closed trades (one every ${POST_MORTEM_EVERY}); compare with the backtest before changing anything, one versioned change at a time`);
   } catch (e) {
     // One unreachable database must not hide the other engines' reports.
