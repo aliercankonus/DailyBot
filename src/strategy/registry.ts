@@ -51,6 +51,15 @@ export const STRATEGIES = {
     integerKeys: new Set(["entryLookback", "emaFast", "emaSlow", "atrPeriod", "fundingCrowdBars"]),
     create: (p) => createTrendBreakout({ ...DEFAULT_TREND_BREAKOUT, maxAtrPct: 0.03, fundingCrowdPct: 0.9, fundingCrowdBars: 540, ...p }),
   },
+  // trendlvfc plus the decisive-break margin (round 24, pre-registered 0.25 ATR; passed in both halves).
+  // Live for A since 2026-11-22 as trendlvfcd+timestop+befee.
+  trendlvfcd: {
+    label: "A-LV-FC-D",
+    interval: "4h",
+    defaults: { ...DEFAULT_TREND_BREAKOUT, maxAtrPct: 0.03, fundingCrowdPct: 0.9, fundingCrowdBars: 540, breakoutAtr: 0.25 },
+    integerKeys: new Set(["entryLookback", "emaFast", "emaSlow", "atrPeriod", "fundingCrowdBars"]),
+    create: (p) => createTrendBreakout({ ...DEFAULT_TREND_BREAKOUT, maxAtrPct: 0.03, fundingCrowdPct: 0.9, fundingCrowdBars: 540, breakoutAtr: 0.25, ...p }),
+  },
   // A-LV plus order-flow confirmation (round 13, pre-registered at 0.5: the breakout candle's
   // aggressive volume must be majority on the trade's side). Research only until it passes.
   trendlvtk: {

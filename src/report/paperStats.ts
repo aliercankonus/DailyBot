@@ -21,9 +21,9 @@ export interface Expectation {
  * 2020-01 to 2026-11, 2513 days, 1% risk per trade). ST, GLS: the phase-1 20-coin engines (rounds 8-10).
  */
 export const EXPECTATIONS: Record<string, Expectation> = {
-  // A runs with befee (stop to entry + 0.3% at MFE 1R) and the funding crowding filter since 2026-11-21
-  // (owner's decisions; PROGRESS.md rounds 21 and 2026-11-21; backtest with real signed funding).
-  A: { label: "A-LV-FC + time stop + befee (4h, BTC/ETH)", tradesPer30d: (460 / 2513) * 30, winRate: 0.43, profitFactor: 1.68, avgR: 0.37, annualVol: 0.162, maxDrawdown: 0.162 },
+  // A runs with befee, the funding crowding filter and the decisive-break margin (0.25 ATR) since 2026-11-22
+  // (owner's decisions; PROGRESS.md rounds 21, 24; CLI backtest with real funding, 2020-01..2026-10, 2496 days).
+  A: { label: "A-LV-FC-D + time stop + befee (4h, BTC/ETH)", tradesPer30d: (373 / 2496) * 30, winRate: 0.46, profitFactor: 1.85, avgR: 0.44, annualVol: 0.149, maxDrawdown: 0.123 },
   // GC runs with be2 (stop to entry at MFE 2R) since 2026-11-19 (PROGRESS.md round 15/17).
   GC: { label: "Golden cross EMA50/200 + be2 (1h, BTC/ETH)", tradesPer30d: (574 / 2513) * 30, winRate: 0.20, profitFactor: 1.44, avgR: 0.41, annualVol: 0.321, maxDrawdown: 0.257 },
   TS: { label: "Time-series momentum (4h, BTC/ETH, long only)", tradesPer30d: (267 / 2513) * 30, winRate: 0.31, profitFactor: 1.9, avgR: 0.36, annualVol: 0.126, maxDrawdown: 0.146 },

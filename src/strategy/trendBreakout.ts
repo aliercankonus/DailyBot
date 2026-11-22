@@ -36,6 +36,11 @@ export interface TrendBreakoutParams {
    */
   fundingCrowdPct: number;
   fundingCrowdBars: number;
+  /**
+   * Decisive-break margin in ATRs (0 = off), round 24: the close must clear the prior N-bar extreme
+   * by at least this many ATRs (long: close >= high + k*ATR; short: close <= low - k*ATR).
+   */
+  breakoutAtr: number;
 }
 
 export const DEFAULT_TREND_BREAKOUT: TrendBreakoutParams = {
@@ -50,6 +55,7 @@ export const DEFAULT_TREND_BREAKOUT: TrendBreakoutParams = {
   oiLookback: 0,
   fundingCrowdPct: 0,
   fundingCrowdBars: 540,
+  breakoutAtr: 0,
 };
 
 /**
@@ -77,7 +83,7 @@ export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAK
   const warmup = Math.max(p.emaSlow, p.entryLookback + 1, p.atrPeriod) + 1;
 
   return {
-    name: `trend-breakout(${p.entryLookback},${p.emaFast}/${p.emaSlow},atr${p.atrPeriod}x${p.stopAtr}/${p.trailAtr}${p.maxAtrPct > 0 ? `,atr<${p.maxAtrPct * 100}%` : ""}${p.minTakerShare > 0 ? `,taker>=${p.minTakerShare}` : ""}${p.oiLookback > 0 ? `,oi>${p.oiLookback}b` : ""}${p.fundingCrowdPct > 0 ? `,fund<p${p.fundingCrowdPct * 100}/${p.fundingCrowdBars}b` : ""})`,
+    name: `trend-breakout(${p.entryLookback},${p.emaFast}/${p.emaSlow},atr${p.atrPeriod}x${p.stopAtr}/${p.trailAtr}${p.maxAtrPct > 0 ? `,atr<${p.maxAtrPct * 100}%` : ""}${p.minTakerShare > 0 ? `,taker>=${p.minTakerShare}` : ""}${p.oiLookback > 0 ? `,oi>${p.oiLookback}b` : ""}${p.fundingCrowdPct > 0 ? `,fund<p${p.fundingCrowdPct * 100}/${p.fundingCrowdBars}b` : ""}${p.breakoutAtr > 0 ? `,break>=${p.breakoutAtr}atr` : ""})`,
     interval: "4h",
     warmup,
     needsFunding: p.fundingCrowdPct > 0,
@@ -103,7 +109,7 @@ export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAK
         oiOk && (p.minTakerShare <= 0 || (buyShare !== null && (side === "LONG" ? buyShare : 1 - buyShare) >= p.minTakerShare))
         && (p.fundingCrowdPct <= 0 || fundingCrowded(candles, side, p.fundingCrowdPct, p.fundingCrowdBars) !== true);
 
-      if (c.close > hi && fast > slow && c.close > slow && flowOk("LONG")) {
+      if (c.close > hi + p.breakoutAtr * a && fast > slow && c.close > slow && flowOk("LONG")) {
         return {
           symbol,
           side: "LONG",
@@ -113,7 +119,7 @@ export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAK
           reason: `close ${c.close} > ${p.entryLookback}-bar high ${hi}; ema${p.emaFast} > ema${p.emaSlow}`,
         };
       }
-      if (c.close < lo && fast < slow && c.close < slow && flowOk("SHORT")) {
+      if (c.close < lo - p.breakoutAtr * a && fast < slow && c.close < slow && flowOk("SHORT")) {
         return {
           symbol,
           side: "SHORT",
@@ -152,7 +158,14 @@ export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAK
         const crowded = trend === "mixed" ? null : fundingCrowded(candles, side, p.fundingCrowdPct, p.fundingCrowdBars);
         parts.push(`funding ${f === undefined ? "n/a" : `${(f * 100).toFixed(4)}%`}${crowded === true ? ` (BLOCKED: ${side.toLowerCase()} side crowded)` : crowded === false ? " (ok)" : ""}`);
       }
-      const wait = trend === "up" ? "long needs close above the high" : trend === "down" ? "short needs close below the low" : "no trade until the EMAs and price agree";
+      if (p.breakoutAtr > 0) {
+        const m = p.breakoutAtr * a;
+        // Parallel log of the round-24 rule: a break the plain rule would take but the margin rejects.
+        if (trend === "down" && c < lo && c > lo - m) parts.push(`BLOCKED: weak break (close ${fmt(c)} below the low but above ${fmt(lo - m)} = low - ${p.breakoutAtr} ATR)`);
+        else if (trend === "up" && c > hi && c < hi + m) parts.push(`BLOCKED: weak break (close ${fmt(c)} above the high but below ${fmt(hi + m)} = high + ${p.breakoutAtr} ATR)`);
+      }
+      const marginTxt = p.breakoutAtr > 0 ? ` by ${p.breakoutAtr} ATR` : "";
+      const wait = trend === "up" ? `long needs close above the high${marginTxt}` : trend === "down" ? `short needs close below the low${marginTxt}` : "no trade until the EMAs and price agree";
       return `${parts.join("; ")}; ${wait}`;
     },
 
