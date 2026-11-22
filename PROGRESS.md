@@ -478,6 +478,17 @@ A live = trendlvfc+timestop+befee, BTC+ETH 4h 2020-01..2026-10, size changes as 
 | x1.5 size when GC and TS agree | 188R, 2.12, 16.9R | 44R, 1.46, 22.3R | 93 / 20 / 75 / 44 | FAIL (more R only through more risk; OOS return/DD 2.27 -> 1.96) |
 Already settled: decide on real market data (done 2026-11-22); loss-streak / drawdown risk cuts failed in round 3 (OOS PF 1.12 -> 1.01); risk per trade is already volatility-based (stop = 2 ATR, 1% risk). Data: L/S and OI from data.binance.vision um/daily/metrics (5-min, from 2020-09 BTC / 2021-12 ETH). Nothing adopted.
 
+### 2026-11-22 — Round 24: signal quality, regime, confirmation (external review, second round)
+Same setup as round 23 (A live, BTC+ETH 4h 2020-01..2026-10; pass = more total R and better return/maxDD in both halves). Exits were not retested: rounds 2-3, 5, 14-16 and 2026-11-21 (TP ladders, partial TP at 1.5-3R, lock at 3R, R trailing, frozen-ATR trail, be variants) already cover them; only befee helped.
+| idea | IS R, PF, DD | OOS R, PF, DD | regimes 20-21/22/23-24/25-26 | verdict |
+|---|---|---|---|---|
+| A live | 130R, 2.06, 12.7R | 35R, 1.51, 15.6R | 67/14/49/35 | - |
+| Q1 volume > 1.5x 20-bar average on the signal candle | 124R, 2.18, 11.5R | 39R, 1.67, 11.3R | 61/17/47/39 | FAIL (IS R lower; PF and DD better in both) |
+| Q2 decisive break: close beyond the 20-bar extreme by >= 0.25 ATR | 131R, 2.43, 10.8R | 36R, 1.65, 10.9R | 70/7/54/36 | PASS |
+| Q3 regime: EMA50 10-bar slope in the trade direction | 121R, 2.09, 10.7R | 34R, 1.53, 15.6R | 60/11/50/34 | FAIL |
+| Q4 GC or TS must agree, else skip | 124R, 2.08, 11.2R | 36R, 1.54, 15.6R | 64/13/47/36 | FAIL |
+Q2 robustness (IS R/PF/DD | OOS R/PF/DD): k=0.15 130/2.20/12.6 | 37/1.64/12.7; 0.20 131/2.30/11.4 | 33/1.56/12.7; 0.30 125/2.36/10.8 | 42/1.85/10.9; 0.35 126/2.40/10.6 | 44/1.99/9.0; 0.50 102/2.32/10.0 | 42/2.03/9.1. Every k raises PF and lowers max DD in both halves with about the same total R (about 20% fewer trades); weak spot: the 2022 bear (6-13R vs 14R). The note "close below the average of the 3 lowest lows" in the review would be a weaker break, not a stronger one (that average sits above the lowest low), so the ATR margin was used instead. Candidate for A (owner's decision).
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
