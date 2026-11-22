@@ -149,6 +149,8 @@ export function createTrendBreakout(p: TrendBreakoutParams = DEFAULT_TREND_BREAK
         `trend ${trend} (ema${p.emaFast} ${fmt(fast)} vs ema${p.emaSlow} ${fmt(slow)})`,
         `${p.entryLookback}-bar high ${fmt(hi)} (${pct(hi / c - 1)} away), low ${fmt(lo)} (${pct(1 - lo / c)} away)`,
       ];
+      // Signed distance of the close beyond the trend-side 20-bar extreme, in ATRs (> 0 = broken).
+      if (trend !== "mixed") parts.push(`break ${((trend === "down" ? lo - c : c - hi) / a).toFixed(2)} ATR`);
       const bs = takerBuyShare(candles[i]!);
       if (p.minTakerShare > 0) parts.push(`taker buy ${bs === null ? "n/a" : pct(bs)} (needs >= ${pct(p.minTakerShare)} on the trade side)`);
       if (p.maxAtrPct > 0) parts.push(`atr ${pct(a / c)} (${a / c >= p.maxAtrPct ? "BLOCKED" : "ok"}, max ${pct(p.maxAtrPct)})`);

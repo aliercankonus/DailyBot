@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { distinctReasons, reasonTemplate } from "../src/report/decisions.js";
+import { decisionTags, distinctReasons, reasonTemplate } from "../src/report/decisions.js";
 
 describe("distinct decision reasons", () => {
   it("collapses candles with the same reason and keeps the latest example", () => {
@@ -14,5 +14,14 @@ describe("distinct decision reasons", () => {
     expect(g[0]).toMatchObject({ symbol: "BTCUSDT", count: 2, firstCandle: 1, lastCandle: 2 });
     expect(g[0]!.example).toContain("-0.78");
     expect(reasonTemplate("atr 3.15% (BLOCKED, max 3.00%)")).toBe("atr #% (BLOCKED, max #%)");
+  });
+});
+
+describe("decision tags", () => {
+  it("tags the reasons a candle carries", () => {
+    expect(decisionTags("trend down; atr 3.15% (BLOCKED, max 3.00%); funding -0.01% (BLOCKED: short side crowded); short needs close below the low")).toEqual(["funding block", "atr block"]);
+    expect(decisionTags("trend down; break 0.10 ATR; BLOCKED: weak break (close 1 below the low but above 0.9 = low - 0.25 ATR); short needs close below the low by 0.25 ATR")).toEqual(["weak break"]);
+    expect(decisionTags("trend down; atr 2.4% (ok, max 3.00%); short needs close below the low")).toEqual(["no break"]);
+    expect(decisionTags("momentum score -0.56 (entry >= 0.6)")).toEqual(["other"]);
   });
 });

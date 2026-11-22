@@ -39,3 +39,20 @@ export function distinctReasons(rows: DecisionRow[]): DecisionGroup[] {
   }
   return [...groups.values()].sort((a, b) => a.symbol.localeCompare(b.symbol) || b.count - a.count);
 }
+
+/** Why-no-order categories for the trend breakout (A); one candle can carry several. */
+export function decisionTags(detail: string): string[] {
+  const tags: string[] = [];
+  if (/BLOCKED: weak break/.test(detail)) tags.push("weak break");
+  if (/BLOCKED: \w+ side crowded/.test(detail)) tags.push("funding block");
+  if (/atr [\d.]+% \(BLOCKED/.test(detail)) tags.push("atr block");
+  if (/trend mixed/.test(detail)) tags.push("no trend");
+  if (!tags.length && /needs close (above|below)/.test(detail)) tags.push("no break");
+  return tags.length ? tags : ["other"];
+}
+
+export function tagCounts(rows: DecisionRow[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const r of rows) for (const t of decisionTags(r.detail)) out[t] = (out[t] ?? 0) + 1;
+  return out;
+}

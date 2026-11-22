@@ -5,7 +5,7 @@
 // whether a 30-trade post-mortem is due.
 import pg from "pg";
 import { deviations, EXPECTATIONS, paperStats, POST_MORTEM_EVERY, type PaperStats } from "../report/paperStats.js";
-import { distinctReasons } from "../report/decisions.js";
+import { distinctReasons, tagCounts } from "../report/decisions.js";
 
 const pct = (x: number | null, d = 1) => (x === null ? "n/a" : `${(x * 100).toFixed(d)}%`);
 const num = (x: number | null, d = 2) => (x === null ? "n/a" : Number.isFinite(x) ? x.toFixed(d) : "inf");
@@ -48,7 +48,9 @@ for (const { bot, url } of dbs) {
       .map((r) => ({ symbol: String(r.symbol), gate: r.gate as string | null, detail: String(r.detail), candleOpenTime: Number(r.candle_open_time) }));
     const groups = distinctReasons(sig);
     const t = (ms: number) => new Date(ms).toISOString().slice(5, 16).replace("T", " ");
-    console.log(`decisions without an order: ${sig.length} candles, ${groups.length} distinct reasons`);
+    const taken = Number((await pool.query("SELECT count(*)::int AS n FROM signals WHERE accepted = true")).rows[0]?.n ?? 0);
+    const tags = Object.entries(tagCounts(sig)).map(([k, v]) => `${k} ${v}`).join(", ");
+    console.log(`decisions without an order: ${sig.length} candles, ${groups.length} distinct reasons | taken ${taken} | ${tags}`);
     for (const g of groups) console.log(`  DECISION ${g.symbol} ${g.gate} x${g.count} [${t(g.firstCandle)} .. ${t(g.lastCandle)}] | ${g.example}`);
     if (s.trades >= POST_MORTEM_EVERY) console.log(`POST-MORTEM: ${s.trades} closed trades (one every ${POST_MORTEM_EVERY}); compare with the backtest before changing anything, one versioned change at a time`);
   } catch (e) {
