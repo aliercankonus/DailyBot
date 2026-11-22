@@ -465,6 +465,19 @@ T2 robustness (IS PF / OOS PF / net): p85 2.13 / 1.60 / 23.8k; p95 1.87 / 1.42 /
 Pre-registered: A's trend (EMA50 vs EMA200), 50-bar impulse (low before high for longs), enter when a candle touches the retracement level and closes back on the trend side, stop beyond the 78.6% level, A's exits (chandelier, time stop, befee). Control: the same rule at non-Fibonacci ratios. BTC+ETH 4h 2020-01..2026-11-20 (IS PF / OOS PF / net, 2 x 10k): A live breakout 1.71 / 1.45 / 19.2k; 0.382 0.94 / 1.41 / 1.4k; 0.45 1.08 / 1.42 / 3.7k; 0.50 1.14 / 1.09 / 2.5k; 0.55 1.19 / 1.55 / 6.4k; 0.618 1.08 / 1.74 / 6.0k; 0.70 0.75 / 1.90 / 1.0k.
 Conclusion: 0.618 is not special (0.55 beats it before 2025, 0.70 beats it after); every ratio is near break-even before 2025 and better after, i.e. a regime effect, not a Fibonacci effect. All far below the breakout (net 1-6k vs 19k). Not adopted.
 
+### 2026-11-22 — Round 23: an external review's suggestions, tested on A live
+A live = trendlvfc+timestop+befee, BTC+ETH 4h 2020-01..2026-10, size changes as weights on R; pass = more total R AND better return/maxDD in both halves. Regimes in R: 2020-21 / 2022 bear / 2023-24 bull / 2025-26.
+| suggestion | IS R, PF, DD | OOS R, PF, DD | regimes | verdict |
+|---|---|---|---|---|
+| A live | 130R, 2.06, 12.7R | 35R, 1.51, 15.6R | 67 / 14 / 49 / 35 | - |
+| funding hard +-0.025% block (instead of percentile) | 129R, 2.05, 12.7R | 32R, 1.42, 18.0R | 68 / 10 / 51 / 32 | FAIL |
+| funding soft +-0.010% = half size, +-0.025% block | 97R, 2.01, 11.8R | 34R, 1.49, 18.0R | 39 / 10 / 48 / 34 | FAIL (0.01% is Binance's default rate, so it halves most longs) |
+| top-trader account L/S fixed: long > 1.7 / short < 0.55 blocked | 137R, 2.23, 12.7R | 17R, 1.25, 15.6R | 65 / 14 / 58 / 17 | FAIL (top traders are long-biased: L/S > 1.7 in 38% of BTC and 70% of ETH candles, < 0.55 almost never) |
+| top-trader L/S above its 90-day 90th pct blocked | 132R, 2.07, 12.7R | 35R, 1.51, 15.6R | 68 / 14 / 49 / 35 | no effect (blocks 1 trade; overlaps the funding filter) |
+| ATR 2-3% = 70% size | 120R, 2.08, 12.7R | 38R, 1.58, 14.4R | 61 / 8 / 50 / 38 | FAIL (better after 2025, worse before) |
+| x1.5 size when GC and TS agree | 188R, 2.12, 16.9R | 44R, 1.46, 22.3R | 93 / 20 / 75 / 44 | FAIL (more R only through more risk; OOS return/DD 2.27 -> 1.96) |
+Already settled: decide on real market data (done 2026-11-22); loss-streak / drawdown risk cuts failed in round 3 (OOS PF 1.12 -> 1.01); risk per trade is already volatility-based (stop = 2 ATR, 1% risk). Data: L/S and OI from data.binance.vision um/daily/metrics (5-min, from 2020-09 BTC / 2021-12 ETH). Nothing adopted.
+
 ## Deep research (2026-11-17, second pass; second-hand from search summaries)
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
