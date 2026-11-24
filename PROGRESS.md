@@ -510,3 +510,13 @@ Conclusion: risk-adjusted return does not improve (Sharpe 1.37 -> 1.36 full, 1.2
 - No directional strategy was verifiably profitable in every year 2020-2026. Trend funds/ETFs lost in 2022 and 2025; their strength is small losses versus buy-and-hold.
 - The only family without losing years is hedged/market-neutral carry (needs a spot leg) and its yield has compressed to near T-bills in 2026.
 - Closest candidates to test next: (G) daily Donchian ensemble, 9 lookbacks 5-360d, trailing stop at the channel midpoint, volatility targeting (Zarattini, Pagani & Barbon 2025); (H) cross-sectional funding carry, long the lowest third / short the highest third by 7-day average funding, dollar-neutral (weak evidence, holdout Sharpe ~1.1 claimed).
+
+### 2026-11-24 — Round 27: liquidation-cascade fade (owner approved "Araştır"), PRE-REGISTERED before any result
+Idea: when open interest (OI) falls fast while price moves hard, the move is forced closing (liquidations), not opinion; once it stops, price tends to retrace (e.g. 21.11: OI flush to 55126, then +12%). Data: OI 5-min from data.binance.vision um/daily/metrics (BTC from 2020-09, ETH from 2021-12), 1h klines.
+Rule (fixed before looking at results), per symbol on closed 1h bars:
+- dOI = OI at bar close / OI 4 bars earlier - 1; move = (close - close 4 bars earlier) / ATR(14, 1h).
+- Long-liquidation cascade: dOI <= -3% and move <= -3 ATR -> arm a LONG; short squeeze: dOI <= -3% and move >= +3 ATR -> arm a SHORT. Armed for the next 6 bars.
+- Trigger: the first armed bar that closes against the cascade (close > open for a long, < for a short); enter at the next bar's open.
+- Stop: the cascade extreme (lowest low / highest high from 4 bars before the cascade bar to the trigger bar) -/+ 0.25 ATR. Target 1.5R, time stop 24 bars; stop is assumed hit first when a bar touches both.
+- Costs 0.2% of price per round trip (taker 0.05% x2 + slippage 0.05% x2), charged in R. One position per symbol.
+Pass rule: in BOTH 2020-24 and 2025-26: >= 30 trades, net R > 0 and PF >= 1.2; and most of the neighbours (dOI 2/3/5% x move 2/3/4 ATR) net positive in both halves. Only then: a blend test with A/GC/TS (new leg helps if its Sharpe > correlation x portfolio Sharpe).
