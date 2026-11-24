@@ -537,3 +537,11 @@ BTC+ETH, long/short at full notional (always in or flat), decided at the close a
 - 1h: EMA cross best (9,100) 52%/0.77 | -55%/-1.12, 0/28 settings positive after 2025; MACD (16,34,13) -33%/-0.49 | -97%/-1.97, 0/27; RSI reversion (21, 20/80) -9%/-0.38 | -15%/-0.96, 0/12; Bollinger reversion (50,3) -56%/-1.25 | -26%/-0.85, 0/12; Supertrend (10,4) 11%/0.16 | -15%/-0.31, 0/9; Donchian (100) 34%/0.52 | -24%/-0.50, 1/5.
 - 4h: EMA cross best (5,150) 74%/1.14 | 55%/1.13, 22/28 settings positive after 2025; MACD (16,34,13) 25%/0.39 | -33%/-0.67, 0/27; RSI reversion -11%/-0.43 | -18%/-1.18, 0/12; Bollinger reversion -36%/-0.89 | -20%/-0.66, 0/12; Supertrend (14,4) 39%/0.60 | 14%/0.29, 6/9; Donchian (55) 43%/0.67 | 18%/0.37, 2/5.
 Reading: only slow 4h trend rules (EMA trend, Supertrend, Donchian) survive both halves; the indicators most used in signal channels (RSI, MACD, Bollinger) lose with every setting, and nothing on 1h survives 2025-26. The surviving family is the one A and GC already trade (EMA50/200 trend + 20-bar Donchian), with stops and 1% risk instead of full notional (A Sharpe 1.51 | 1.29). No change.
+
+### 2026-11-24 — Round 30: EMA 5/150 (best of the round-29 sweep) vs A (owner request)
+BTC+ETH 4h 2020-01..2026-10, real funding, costs as standard (script scratchpad ema5150.mts). CAGR / vol / Sharpe / max DD, 2020-24 | 2025-26:
+- A live (EMA50/200): 24.3% / 14% / 1.62 / 10.2% | 18.6% / 17% / 1.08 / 12.3%; 262tr 126R PF 2.36 | 111tr 38R PF 1.70.
+- A with EMA 5/150 as its trend filter: 25.0% / 15% / 1.53 / 12.0% | 20.2% / 18% / 1.10 / 14.8%; 347tr 130R PF 2.04 | 143tr 41R PF 1.63. A few more R from ~30% more trades, but return/maxDD worse in both halves (2.38 -> 2.08; 1.51 -> 1.36): FAIL on the standing rule.
+- EMA 5/150 raw, always in, full notional: 32.3% / 68% / 0.74 / 46.4% | 35.6% / 51% / 0.85 / 41.9% (with funding the sweep's Sharpe 1.14 falls to 0.74-0.85); vol-matched to A (x0.23): 10.8% / 16% / 0.73 / 11.7% | 9.6% / 12% / 0.84 / 11.5%. 490 position flips in 6.8 years.
+- 50% A + 50% EMA 5/150 (vol-matched): Sharpe 1.33 | 1.10 vs A 1.62 | 1.08; correlation 0.50; as a leg its Sharpe 0.73 < 0.50 x 1.62. Not added.
+Conclusion: at the same risk A earns about twice as much (Sharpe 1.62 vs 0.73 before 2025, 1.08 vs 0.84 after); no change.
