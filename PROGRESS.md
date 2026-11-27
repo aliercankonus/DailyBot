@@ -557,3 +557,10 @@ Result (aggTrades BTC+ETH 2023-02..2026-10, 92 monthly files, 8214 4h bars per s
 - T2 passes the letter of the rule but on 6 trades: 2023-24 107tr 38.6R PF 2.11 DD 10.7R -> 104tr 40.0R PF 2.20 DD 10.7R (removed 3 trades, -1.5R); 2025-26 111tr 38.2R PF 1.70 -> 108tr 38.7R PF 1.72 (removed 3, -0.5R). A breakout candle almost always has large-trade buying in its direction already (same finding as the unfiltered taker filter: 12 of 490 removed). +1.9R over 218 trades is noise, T1 shows no predictive power behind it, and live use would need an aggTrade websocket feed. NOT ADOPTED.
 - T3 FAIL: fade of unconfirmed 20-bar extremes 2023-24 105tr +4.3R PF 1.10; 2025-26 125tr +5.1R PF 1.09 (needs 1.2).
 Conclusion: size-filtered CVD adds nothing to BTC/ETH 4h decisions; the information is already in the price.
+
+### 2026-11-27 — Round 32: failed-breakout reversal ("turtle soup") for the 57-62k range (owner: "how would we catch the swings"), PRE-REGISTERED before any result
+Why: earlier mean reversion bought every dip and lost; the 25.11 case was different: price pierced the 20-bar low by a hair (A rejected it as a weak break) and reversed +3.6%. Rule fades only FAILED breaks, the complement of A.
+Rule (BTC+ETH 4h, 2020-01..2026-11-25, both sides, no trend filter):
+- Long: some bar in the last 3 (t-2..t) made a low below the 20-bar low L (L = lowest low of the 20 bars before that piercing bar) and bar t closes back above L -> long at the next open. Short mirrors at the 20-bar high.
+- Stop: lowest low since the piercing bar - 0.25 ATR(14) (short: highest high + 0.25 ATR). Target: the 20-bar channel midpoint; skip if the target is < 1R away. Time stop 18 bars (3 days). Stop first when a bar touches both. Costs 0.2% per round trip, funding ignored. One position per symbol.
+Pass: in BOTH 2020-24 and 2025-26: >= 30 trades, net R > 0, PF >= 1.2; most neighbours (lookback 10/20/55 x time stop 12/18/30) net positive in both halves. Then a blend test with A (correlation, Sharpe rule).
