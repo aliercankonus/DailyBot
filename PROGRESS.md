@@ -591,3 +591,8 @@ Result (script scratchpad range34.py, not committed; trades, R, PF, win; 2020-24
 - P3 low-volume 5-day-low dip (long): 202tr +8.4R PF 1.20 win 64% | 90tr -17R PF 0.46; 3-day: 267tr +6.6R 1.12 | 121tr -17R 0.56. FAIL (worked before 2025, collapses after).
 - P4 weekly VWAP 2 std: 799tr -292R PF 0.61 | 363tr -128R PF 0.62; 2.5 std: 284tr -90R 0.65 | 120tr -32R 0.71. FAIL.
 Conclusion: none of the four publicly claimed range tools survives costs on BTC/ETH; with rounds 7, 20, 27, 31, 32 this closes range/top-bottom picking on BTC/ETH candles. High win rates (44-64%) do not offset the larger losses.
+
+### 2026-11-27 — Round 35: confluence of the range tools (owner: "why test them one by one, combine them"), PRE-REGISTERED before any result
+Multiple-testing guard: 15 signals give 105 pairs / 455 triples, some of which would pass by luck, so ONE score rule is fixed in advance; the >= 4 variant is a neighbour, not a second chance.
+On each closed 1h bar, five long votes: (1) close below the 168-bar volume-profile VAL; (2) close below weekly anchored VWAP - 2 std; (3) RSI(14,1h) <= 30; (4) close below Bollinger(20,2) lower band; (5) the bar's low pierced the prior 80-bar (= 20 x 4h) low and the close is back above it. Short votes mirror. Regime: previous day's ADX(14) < 25.
+Entry: regime on and >= 3 votes -> enter at the next open. Stop 1.5 ATR(14,1h); target = weekly VWAP; skip if the target is < 1R away; time stop 24 bars. BTC+ETH 2020-01..2026-11-22, costs 0.2% per round trip, one position per symbol. Pass: both halves >= 30 trades, net R > 0, PF >= 1.2, and the >= 4-vote neighbour net positive in both halves.
