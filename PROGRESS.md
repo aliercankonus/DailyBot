@@ -571,3 +571,9 @@ Why: trend following gains mainly from breadth (more uncorrelated markets -> mor
 Universe fixed in advance, no per-coin selection: BTC, ETH + SOL, BNB, XRP, DOGE, ADA, AVAX, LINK, LTC (large caps listed on Binance futures before 2021). 4h, 2020-01..2026-10, real funding, standard costs, split 2025-01-01.
 Variants: base = A live on BTC+ETH, 1% risk, max 2 open (as live). V1 = 10 coins, 0.5% risk, max 4 open (same total open risk as base). V2 = 10 coins, 1% risk, max 4 open.
 Pass (V1 is the decision variant): Sharpe higher than base in BOTH halves and max drawdown not higher than base in either half. V2 and per-coin numbers are reported for information only.
+Result (script scratchpad multi.mts; tools/fr_dl.py for funding; not committed). CAGR / Sharpe / maxDD, trades, R, PF; 2020-24 | 2025-26:
+- base BTC+ETH 1% max2: 24.3% / 1.62 / 10.2%, 262tr 126R PF 2.36 | 18.6% / 1.08 / 12.3%, 111tr 38R PF 1.70.
+- V1 10 coins 0.5% max4: 20.0% / 1.41 / 9.8%, 805tr 206R PF 1.71 | 9.8% / 0.60 / 18.5%, 386tr 47R PF 1.26. FAIL (Sharpe lower in both halves, DD higher after 2025).
+- V2 10 coins 1% max4: 40.5% / 1.42 / 18.5% | 14.6% / 0.56 / 34.3% (more return only through more risk).
+- Per coin alone (1%, R and PF 2020-24 | 2025-26): BTC 63R 2.31 | 3R 1.09; ETH 62R 2.42 | 35R 2.61; SOL -1R 0.95 | 2R 1.09; BNB 25R 1.52 | 16R 1.62; XRP 6R 1.20 | -4R 0.86; DOGE 15R 1.61 | 2R 1.09; ADA 15R 1.43 | 9R 1.44; AVAX -5R 0.80 | 5R 1.26; LINK 5R 1.16 | 1R 1.04; LTC 3R 1.08 | 1R 1.05.
+Reading: A's logic is positive over the full period on 9 of 10 coins it was never tuned on (robustness evidence that it is not fitted to BTC/ETH), but the alts are much weaker (PF ~1.0-1.6) and move with BTC, so with a fixed risk budget they take slots from the better BTC/ETH signals: more trades, lower quality. Not adopted. BNB/ADA look best, but picking them after the fact would be selection bias; a candidate only if they keep it up in live paper data.
