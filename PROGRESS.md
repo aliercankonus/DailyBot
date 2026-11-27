@@ -585,3 +585,9 @@ Web research: rigorous sources are negative for simple crypto mean reversion (ar
 - P3 low-volume-regime dip buy (daily, long only): regime = 20-day average volume below its 100-day average; long at the next open when the close is the lowest of the last 5 closes; exit at the next open after a close above the previous day's high, or after 5 days; stop 2 ATR(14,daily). Neighbour: 3-day low.
 - P4 weekly anchored VWAP bands (1h): VWAP and volume-weighted std from the Monday 00:00 UTC anchor (from the 24th bar of the week); long when the close is below VWAP - 2 std and daily ADX(14) < 25, short above + 2 std; target VWAP; stop 1 ATR(14,1h) beyond the entry; time stop 24 bars. Neighbour: 2.5 std.
 Pass (each): BOTH halves >= 30 trades, net R > 0, PF >= 1.2, and the neighbour net positive in both halves.
+Result (script scratchpad range34.py, not committed; trades, R, PF, win; 2020-24 | 2025-26):
+- P1 volume profile 168: 1235tr -188R PF 0.73 44% | 450tr -42R PF 0.83 46%; neighbour 336: 744tr -0.4R PF 1.00 | 346tr -33R PF 0.83. FAIL.
+- P2 ADX<22 + SMA50 gate, RSI 30/70: 119tr -29R PF 0.58 | 59tr -12R PF 0.63; 25/75: 55tr -11R 0.65 | 24tr -4R 0.71. FAIL (the claimed PF 1.45-1.65 does not reproduce).
+- P3 low-volume 5-day-low dip (long): 202tr +8.4R PF 1.20 win 64% | 90tr -17R PF 0.46; 3-day: 267tr +6.6R 1.12 | 121tr -17R 0.56. FAIL (worked before 2025, collapses after).
+- P4 weekly VWAP 2 std: 799tr -292R PF 0.61 | 363tr -128R PF 0.62; 2.5 std: 284tr -90R 0.65 | 120tr -32R 0.71. FAIL.
+Conclusion: none of the four publicly claimed range tools survives costs on BTC/ETH; with rounds 7, 20, 27, 31, 32 this closes range/top-bottom picking on BTC/ETH candles. High win rates (44-64%) do not offset the larger losses.
